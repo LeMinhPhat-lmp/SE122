@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/AERS/">
+    <Project Path="src/AERS/API/API.csproj" />
     <Project Path="src/AERS/Application/Application.csproj" />
     <Project Path="src/AERS/Domain/Domain.csproj" />
     <Project Path="src/AERS/Infrastructure/Infrastructure.csproj" />
