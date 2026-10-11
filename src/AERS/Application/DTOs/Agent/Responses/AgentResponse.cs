@@ -1,4 +1,4 @@
-namespace Application.DTOs.Request;
+namespace Application.DTOs.Agent.Responses;
 
 public sealed record AgentResponse(
   Guid Id,
@@ -7,5 +7,5 @@ public sealed record AgentResponse(
   string Description,
   string? OwnerRef,
   DateTimeOffset LastHearbeatAt,
-  IReadOnlyList<CapabilitySubmission> Capabilities
+  IReadOnlyList<CapabilityResponse> Capabilities
 );
