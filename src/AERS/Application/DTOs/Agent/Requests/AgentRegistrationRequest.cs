@@ -1,6 +1,4 @@
-using System.Security.Cryptography.X509Certificates;
-
-namespace Application.DTOs.Request;
+namespace Application.DTOs.Agent.Requests;
 
 public sealed record AgentRegistrationRequest(
   AgentCardSubmission AgentCardSubmission

@@ -1,9 +1,8 @@
 using System.Text.Json;
 
-namespace Application.DTOs.Request;
+namespace Application.DTOs.Agent.Requests;
 
-public sealed record CapabilityResponse(
-  Guid Id,
+public sealed record CapabilitySubmission(
   string Name,
   string Description,
   JsonElement InputSchema,

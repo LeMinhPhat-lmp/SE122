@@ -1,4 +1,4 @@
-namespace Application.DTOs.Request;
+namespace Application.DTOs.Agent.Requests;
 
 public sealed record AgentCardSubmission(
   string Name,

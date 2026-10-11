@@ -3,7 +3,7 @@ using Domain.Abstractions;
 
 namespace Domain.Entities;
 
-public sealed class AgentCapability : BaseEntity, IAuditable
+public sealed class AgentCapability : BaseEntity, IAuditable, ISoftDeletable
 {
   public Guid AgentId { get; set; }
   public Agent Agent { get; set; } = null!;
@@ -13,4 +13,6 @@ public sealed class AgentCapability : BaseEntity, IAuditable
   public JsonElement OutputSchemaJson { get; set; }
   public DateTimeOffset CreatedAt { get; set; }
   public DateTimeOffset? UpdatedAt { get; set; }
+  public bool IsDeleted => DeletedAt.HasValue;
+  public DateTimeOffset? DeletedAt { get; set; }
 }
