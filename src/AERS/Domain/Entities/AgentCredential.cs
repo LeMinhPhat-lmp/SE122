@@ -10,5 +10,10 @@ public sealed class AgentCredential : BaseEntity, IAuditable
   public DateTimeOffset CreatedAt { get; set; }
   public DateTimeOffset? UpdatedAt { get; set; }
   public DateTimeOffset? RevokedAt { get; set; }
-  public bool IsRevoked => RevokedAt is not null && RevokedAt.HasValue;
+  public bool IsRevoked => RevokedAt.HasValue;
+
+  public void Revoke(DateTimeOffset now)
+  {
+    RevokedAt ??= now;
+  }
 }

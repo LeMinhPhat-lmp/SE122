@@ -7,16 +7,17 @@ public sealed class UnitOfWork(
   AersDbContext context,
   IAgentCapabilityRepository agentCapabilityRepository,
   IAgentCredentialRepository agentCredentialRepository,
-  IAgentRepository agentRepository) : IUnitOfWork
+  IAgentRepository agentRepository,
+  IAuditEventRepository auditEventRepository) : IUnitOfWork
 {
   public IAgentCapabilityRepository AgentCapabilityRepository => agentCapabilityRepository;
   public IAgentCredentialRepository AgentCredentialRepository => agentCredentialRepository;
   public IAgentRepository AgentRepository => agentRepository;
-
+  public IAuditEventRepository AuditEventRepository => auditEventRepository;
 
   public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
   {
-    return context.SaveChangesAsync();
+    return context.SaveChangesAsync(cancellationToken);
   }
 
   public async Task<ITransaction> StartTransaction(CancellationToken cancellationToken = default)

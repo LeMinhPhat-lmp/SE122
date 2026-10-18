@@ -8,9 +8,10 @@ public sealed class AgentCredentialConfiguration : IEntityTypeConfiguration<Agen
 {
   public void Configure(EntityTypeBuilder<AgentCredential> builder)
   {
+    builder.ToTable("agent_credentials");
     builder.HasKey(agentCredential => agentCredential.Id);
     builder.Property(x => x.ApiKeyHash)
-      .HasMaxLength(64)
+      .HasMaxLength(64) // SHA-256 hex
       .IsRequired();
     builder.HasIndex(x => x.ApiKeyHash)
       .IsUnique();

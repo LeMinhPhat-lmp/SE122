@@ -31,7 +31,7 @@ public sealed class AgentCapabilityRepository(AersDbContext context) : IAgentCap
 
   public Task<AgentCapability?> GetByIdAsync(Guid entityId, bool trackChanges = false, CancellationToken cancellationToken = default)
   {
-    var query = context.AgentCapabilities.AsQueryable().Where(capability => !capability.IsDeleted);
+    var query = context.AgentCapabilities.AsQueryable().Where(capability => capability.DeletedAt == null);
     if (!trackChanges)
       query = query.AsNoTracking();
     return query.FirstOrDefaultAsync(capability => capability.Id == entityId, cancellationToken);
@@ -39,7 +39,7 @@ public sealed class AgentCapabilityRepository(AersDbContext context) : IAgentCap
 
   public Task<List<AgentCapability>> ListEntitiesAsync(int? skip, int? take, bool trackChanges = false, CancellationToken cancellationToken = default)
   {
-    var query = context.AgentCapabilities.AsQueryable().Where(capability => !capability.IsDeleted);
+    var query = context.AgentCapabilities.AsQueryable().Where(capability => capability.DeletedAt == null);
     if (!trackChanges)
       query = query.AsNoTracking();
     if (skip.HasValue)
