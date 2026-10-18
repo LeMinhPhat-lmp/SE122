@@ -1,0 +1,14 @@
+# Local infrastructure for development: docker compose -f docker-compose.dev.yml up -d
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: aers
+      POSTGRES_USER: aers
+      POSTGRES_PASSWORD: aers
+    ports:
+      - "5432:5432"
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"

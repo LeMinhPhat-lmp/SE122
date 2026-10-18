@@ -2,34 +2,38 @@ using Application.DTOs.Result.Enums;
 
 namespace Application.DTOs.Result.Responses;
 
-public sealed class Result<T>
+/// <summary>Outcome of an operation that returns no data. Contract between the Application and API layers.</summary>
+public class Result
 {
   public bool IsSuccess => ResultStatus == ResultStatus.Success;
   public ResultStatus ResultStatus { get; set; }
+  public IList<string> Errors { get; set; } = new List<string>();
+
+  /// <summary>Machine-readable error code from Protocol Spec section 12 (for example AGENT_NOT_FOUND).</summary>
+  public string? ErrorCode { get; set; }
+
+  /// <summary>Per-field problems, used by validation failures.</summary>
+  public IReadOnlyList<ErrorDetail> ErrorDetails { get; set; } = [];
+
+  protected Result() { }
+
+  public static Result Success() => new() { ResultStatus = ResultStatus.Success };
+  public static Result Failure(ResultStatus status, string error) => new() { ResultStatus = status, Errors = [error] };
+  public static Result Failure(ResultStatus status, IList<string> errors) => new() { ResultStatus = status, Errors = errors };
+  public static Result Failure(ResultStatus status, string code, string message, IReadOnlyList<ErrorDetail>? details = null) =>
+    new() { ResultStatus = status, ErrorCode = code, Errors = [message], ErrorDetails = details ?? [] };
+}
+
+/// <summary>Outcome of an operation that returns data.</summary>
+public sealed class Result<T> : Result
+{
   public T? Data { get; set; }
-  public IList<string> Errors { get; set; } = null!;
 
   private Result() { }
-  private Result(T? data = default)
-  {
-    ResultStatus = ResultStatus.Success;
-    Data = data;
-    Errors = null!;
-  }
-  private Result(ResultStatus resultStatus, IList<string> errors)
-  {
-    ResultStatus = resultStatus;
-    Data = default;
-    Errors = errors;
-  }
-  private Result(ResultStatus resultStatus, string error)
-  {
-    ResultStatus = resultStatus;
-    Data = default;
-    Errors = new List<string> { error };
-  }
 
-  public static Result<T> Success(T? data = default) => new Result<T>(data);
-  public static Result<T> Failure(ResultStatus status, string error) => new Result<T>(status, errors: [error]);
-  public static Result<T> Failure(ResultStatus status, IList<string> errors) => new Result<T>(status, errors: errors);
+  public static new Result<T> Success(T? data = default) => new() { ResultStatus = ResultStatus.Success, Data = data };
+  public static new Result<T> Failure(ResultStatus status, string error) => new() { ResultStatus = status, Errors = [error] };
+  public static new Result<T> Failure(ResultStatus status, IList<string> errors) => new() { ResultStatus = status, Errors = errors };
+  public static new Result<T> Failure(ResultStatus status, string code, string message, IReadOnlyList<ErrorDetail>? details = null) =>
+    new() { ResultStatus = status, ErrorCode = code, Errors = [message], ErrorDetails = details ?? [] };
 }

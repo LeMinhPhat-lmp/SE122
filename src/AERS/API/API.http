@@ -1,6 +1,63 @@
 @API_HostAddress = http://localhost:5161
+@RegistrationKey = dev-registration-key-change-me
+# After registering, paste the returned agentId and apiKey into the two variables below
+@AgentId = 00000000-0000-0000-0000-000000000000
+@ApiKey = aers_replace_me
 
-GET {{API_HostAddress}}/weatherforecast/
-Accept: application/json
+### Health
+GET {{API_HostAddress}}/health
 
-###
+### Register (201 + { agentId, apiKey })
+POST {{API_HostAddress}}/agents/register
+Content-Type: application/json
+X-Registration-Key: {{RegistrationKey}}
+
+{
+  "agentCard": {
+    "name": "CV Analysis Agent",
+    "domain": "jobhunt",
+    "description": "Analyze a CV against a job",
+    "capabilities": [
+      {
+        "name": "analyze_cv",
+        "description": "Analyze a CV against a job",
+        "inputSchema": { "type": "object", "properties": { "cvText": { "type": "string" } }, "required": ["cvText"] },
+        "outputSchema": { "type": "object", "properties": { "score": { "type": "number" } } }
+      }
+    ],
+    "ownerRef": null
+  }
+}
+
+### Register with agentId in the payload (400 VALIDATION_ERROR)
+POST {{API_HostAddress}}/agents/register
+Content-Type: application/json
+X-Registration-Key: {{RegistrationKey}}
+
+{ "agentCard": { "agentId": "cv-agent-001", "name": "x", "domain": "jobhunt", "description": "x", "capabilities": [] } }
+
+### Heartbeat (204)
+POST {{API_HostAddress}}/agents/{{AgentId}}/heartbeat
+X-Api-Key: {{ApiKey}}
+
+### Get agent (200 AgentDetailResponse)
+GET {{API_HostAddress}}/agents/{{AgentId}}
+X-Api-Key: {{ApiKey}}
+
+### Deregister (204)
+DELETE {{API_HostAddress}}/agents/{{AgentId}}
+X-Api-Key: {{ApiKey}}
+
+### Heartbeat with an unknown body property (400 VALIDATION_ERROR)
+POST {{API_HostAddress}}/agents/{{AgentId}}/heartbeat
+Content-Type: application/json
+X-Api-Key: {{ApiKey}}
+
+{ "unknown": 1 }
+
+### Invalid agent id in the route (400 VALIDATION_ERROR)
+GET {{API_HostAddress}}/agents/not-a-guid
+X-Api-Key: {{ApiKey}}
+
+### Missing credential (401 AUTHENTICATION_FAILED)
+GET {{API_HostAddress}}/agents/{{AgentId}}

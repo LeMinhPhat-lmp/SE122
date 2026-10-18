@@ -7,7 +7,7 @@ public sealed class AgentRegistrationRequestValidator : AbstractValidator<AgentR
 {
   public AgentRegistrationRequestValidator(IValidator<AgentCardSubmission> agentCardSubmissionValidator)
   {
-    RuleFor(entity => entity.AgentCardSubmission)
+    RuleFor(entity => entity.AgentCard)
       .NotNull()
       .SetValidator(agentCardSubmissionValidator);
   }

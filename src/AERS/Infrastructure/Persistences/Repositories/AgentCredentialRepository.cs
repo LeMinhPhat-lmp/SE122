@@ -16,12 +16,24 @@ public sealed class AgentCredentialRepository(AersDbContext context) : IAgentCre
     return context.AddRangeAsync(entities, cancellationToken);
   }
 
-  public Task<AgentCredential?> GetByAgentIdAsync(Guid targetAgentId, bool trackChanges = false, CancellationToken cancellationToken = default)
+  public Task<List<AgentCredential>> ListByAgentIdAsync(Guid agentId, bool trackChanges = false, CancellationToken cancellationToken = default)
   {
-    var query = context.AgentCredentials.AsQueryable();
+    var query = context.AgentCredentials.AsQueryable().Where(credential => credential.AgentId == agentId);
     if (!trackChanges)
       query = query.AsNoTracking();
-    return query.FirstOrDefaultAsync(credential => credential.AgentId == targetAgentId, cancellationToken);
+    return query.ToListAsync(cancellationToken);
+  }
+
+  public Task<AgentCredential?> GetActiveByHashAsync(string apiKeyHash, CancellationToken cancellationToken = default)
+  {
+    return context.AgentCredentials
+      .AsNoTracking()
+      .Include(credential => credential.Agent)
+      .FirstOrDefaultAsync(
+        credential => credential.ApiKeyHash == apiKeyHash
+          && credential.RevokedAt == null
+          && credential.Agent.DeletedAt == null,
+        cancellationToken);
   }
 
   public Task<AgentCredential?> GetByIdAsync(Guid entityId, bool trackChanges = false, CancellationToken cancellationToken = default)

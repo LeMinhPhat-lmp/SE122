@@ -31,15 +31,23 @@ public sealed class AgentRepository(AersDbContext context) : IAgentRepository
 
   public Task<Agent?> GetByIdAsync(Guid entityId, bool trackChanges = false, CancellationToken cancellationToken = default)
   {
-    var query = context.Agents.AsQueryable().Where(agent => !agent.IsDeleted);
+    var query = context.Agents.AsQueryable().Where(agent => agent.DeletedAt == null);
     if (!trackChanges)
       query = query.AsNoTracking();
     return query.FirstOrDefaultAsync(agent => agent.Id == entityId, cancellationToken);
   }
 
+  public Task<Agent?> GetWithCapabilitiesAsync(Guid agentId, CancellationToken cancellationToken = default)
+  {
+    return context.Agents
+      .AsNoTracking()
+      .Include(agent => agent.Capabilities.Where(capability => capability.DeletedAt == null))
+      .FirstOrDefaultAsync(agent => agent.Id == agentId && agent.DeletedAt == null, cancellationToken);
+  }
+
   public Task<List<Agent>> ListEntitiesAsync(int? skip, int? take, bool trackChanges = false, CancellationToken cancellationToken = default)
   {
-    var query = context.Agents.AsQueryable().Where(agent => !agent.IsDeleted);
+    var query = context.Agents.AsQueryable().Where(agent => agent.DeletedAt == null);
     if (!trackChanges)
       query = query.AsNoTracking();
     if (skip.HasValue)
