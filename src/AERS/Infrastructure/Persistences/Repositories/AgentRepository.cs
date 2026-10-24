@@ -45,6 +45,37 @@ public sealed class AgentRepository(AersDbContext context) : IAgentRepository
       .FirstOrDefaultAsync(agent => agent.Id == agentId && agent.DeletedAt == null, cancellationToken);
   }
 
+  public async Task<AgentPage> ListActiveAsync(string domain, string? capabilityName, DiscoveryCursorPosition? after, int limit,
+    CancellationToken cancellationToken = default)
+  {
+    // Row-value comparison keeps both the keyset predicate and the ordering inside PostgreSQL, where uuid ordering is
+    // defined (the .NET Guid order differs). Plain LINQ would be needed only for the first page.
+    var source = after is null
+      ? context.Agents.AsQueryable()
+      : context.Agents.FromSql($"""
+          SELECT * FROM agents
+          WHERE (registered_at, id) > ({after.RegisteredAt.ToUniversalTime()}, {after.Id})
+          """);
+
+    var query = source
+      .AsNoTracking()
+      .Where(agent => agent.DeletedAt == null && agent.Domain == domain);
+
+    if (capabilityName is not null)
+      query = query.Where(agent => agent.Capabilities.Any(capability => capability.Name == capabilityName && capability.DeletedAt == null));
+
+    // One extra row tells whether a next page exists; it is never returned.
+    var rows = await query
+      .Include(agent => agent.Capabilities.Where(capability => capability.DeletedAt == null))
+      .AsSplitQuery()
+      .OrderBy(agent => agent.CreatedAt)
+      .ThenBy(agent => agent.Id)
+      .Take(limit + 1)
+      .ToListAsync(cancellationToken);
+
+    return new AgentPage(rows.Take(limit).ToList(), rows.Count > limit);
+  }
+
   public Task<List<Agent>> ListEntitiesAsync(int? skip, int? take, bool trackChanges = false, CancellationToken cancellationToken = default)
   {
     var query = context.Agents.AsQueryable().Where(agent => agent.DeletedAt == null);

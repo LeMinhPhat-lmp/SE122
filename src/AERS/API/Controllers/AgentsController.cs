@@ -1,4 +1,5 @@
 using API.Authentication;
+using API.DTOs.ApiContract.Requests;
 using API.DTOs.ApiContract.Responses;
 using API.Extensions;
 using Application.DTOs.Agent.Requests;
@@ -48,6 +49,39 @@ public sealed class AgentsController(IAgentRegistryService registryService) : Co
   {
     var result = await registryService.HeartbeatAsync(agentId, User.ToAgentContext(), cancellationToken);
     return result.IsSuccess ? NoContent() : result.ToErrorResult();
+  }
+
+  [HttpGet]
+  [Authorize(AuthenticationSchemes = AuthSchemes.ApiKey)]
+  [EndpointSummary("List agents (capability discovery)")]
+  [EndpointDescription("Lists active agents of one domain (the caller's own domain unless 'domain' is given and allowed by policy), " +
+    "ordered by registration time. Pagination is cursor based: pass nextCursor as 'cursor' and keep following it until it is null. " +
+    "With onlineOnly=true a page can hold fewer than 'limit' items (even none) while nextCursor is still non-null. " +
+    "The list does not show online/offline status; use GET /agents/{agentId} for that.")]
+  [ProducesResponseType<AgentDiscoveryResponse>(StatusCodes.Status200OK)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status401Unauthorized)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status403Forbidden)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status500InternalServerError)]
+  public async Task<IActionResult> ListAgentsAsync([FromQuery] DiscoveryQueryRequest request, CancellationToken cancellationToken)
+  {
+    var query = new AgentQuery(request.Domain, request.Capability, request.OnlineOnly, request.Limit, request.Cursor);
+    var result = await registryService.ListAsync(query, User.ToAgentContext(), cancellationToken);
+    return result.IsSuccess ? Ok(result.Data) : result.ToErrorResult();
+  }
+
+  [HttpGet("{agentId}/capabilities")]
+  [Authorize(AuthenticationSchemes = AuthSchemes.ApiKey)]
+  [EndpointSummary("Get the capabilities (with input/output schemas) of one agent")]
+  [ProducesResponseType<AgentCapabilitiesResponse>(StatusCodes.Status200OK)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status400BadRequest)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status401Unauthorized)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status403Forbidden)]
+  [ProducesResponseType<ErrorResponse>(StatusCodes.Status404NotFound)]
+  public async Task<IActionResult> GetAgentCapabilitiesAsync(Guid agentId, CancellationToken cancellationToken)
+  {
+    var result = await registryService.GetCapabilitiesAsync(agentId, User.ToAgentContext(), cancellationToken);
+    return result.IsSuccess ? Ok(result.Data) : result.ToErrorResult();
   }
 
   [HttpGet("{agentId}", Name = RouteNames.GetAgent)]
