@@ -44,6 +44,23 @@ public sealed class RedisAgentPresenceStore(IConnectionMultiplexer redis, IOptio
       return new AgentPresence(isOnline, lastHeartbeatAt);
     }, cancellationToken);
 
+  public Task<IReadOnlyDictionary<Guid, bool>> GetOnlineStatusAsync(IReadOnlyCollection<Guid> agentIds, CancellationToken cancellationToken = default)
+  {
+    if (agentIds.Count == 0)
+      return Task.FromResult<IReadOnlyDictionary<Guid, bool>>(new Dictionary<Guid, bool>());
+
+    return ExecuteAsync<IReadOnlyDictionary<Guid, bool>>(async database =>
+    {
+      // One pipelined round trip for all keys instead of one await per agent.
+      var batch = database.CreateBatch();
+      var checks = agentIds.Distinct().ToDictionary(agentId => agentId, agentId => batch.KeyExistsAsync(AliveKey(agentId)));
+      batch.Execute();
+      await Task.WhenAll(checks.Values);
+
+      return checks.ToDictionary(check => check.Key, check => check.Value.Result);
+    }, cancellationToken);
+  }
+
   public Task RemoveAsync(Guid agentId, CancellationToken cancellationToken = default) =>
     ExecuteAsync(
       database => database.KeyDeleteAsync(new RedisKey[] { AliveKey(agentId), LastBeatKey(agentId) }),

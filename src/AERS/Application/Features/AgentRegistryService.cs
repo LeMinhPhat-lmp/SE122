@@ -3,9 +3,11 @@ using Application.DTOs.Agent.Requests;
 using Application.DTOs.Agent.Responses;
 using Application.DTOs.Result.Enums;
 using Application.DTOs.Result.Responses;
+using Application.Discovery;
 using Application.Exceptions;
 using Application.Extensions;
 using Application.Interfaces.Features;
+using Application.Interfaces.Policies;
 using Application.Interfaces.Repositories;
 using Application.Interfaces.Runtime;
 using Application.Interfaces.Security;
@@ -15,6 +17,7 @@ using Application.Options;
 using Domain.Constants;
 using Domain.Entities;
 using FluentValidation;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -26,11 +29,17 @@ public sealed class AgentRegistryService(
   IApiKeyService apiKeyService,
   IAgentPresenceStore presenceStore,
   IOptions<AersPolicyOptions> policyOptions,
+  IOptions<DiscoveryOptions> discoveryOptions,
+  IDomainAccessPolicy domainAccessPolicy,
   TimeProvider timeProvider,
   ILogger<AgentRegistryService> logger) : IAgentRegistryService
 {
   // An agent counts as online while its presence key lives, i.e. for the offline threshold after the last heartbeat.
   private readonly TimeSpan presenceTtl = TimeSpan.FromSeconds(policyOptions.Value.Heartbeat.OfflineThresholdSeconds);
+
+  // Same patterns as registration (spec section 1.2.1); \z instead of $ so a trailing newline is not accepted.
+  private static readonly Regex DomainPattern = new(@"^[a-z0-9][a-z0-9-]{0,63}\z", RegexOptions.Compiled);
+  private static readonly Regex CapabilityPattern = new(@"^[A-Za-z][A-Za-z0-9_.-]{0,99}\z", RegexOptions.Compiled);
 
   public async Task<Result<AgentRegistrationResponse>> RegisterAsync(AgentRegistrationRequest request, CancellationToken cancellationToken = default)
   {
@@ -129,17 +138,86 @@ public sealed class AgentRegistryService(
     if (agent is null)
       return Result<AgentDetailResponse>.Failure(ResultStatus.NotFound, ErrorCodes.AgentNotFound, "The agent does not exist or has been deregistered.");
 
-    // Access rule (spec section 1.8): the agent itself, the same domain, or a domain pair on the allowlist.
+    // Access rule (spec section 1.8): the agent itself, or whatever the domain access policy allows.
     var allowed = caller.AgentId == agent.Id
-      || string.Equals(caller.Domain, agent.Domain, StringComparison.OrdinalIgnoreCase)
-      || policyOptions.Value.DomainPolicy.CrossDomainRules.Any(rule =>
-          string.Equals(rule.CallerDomain, caller.Domain, StringComparison.OrdinalIgnoreCase)
-          && string.Equals(rule.TargetDomain, agent.Domain, StringComparison.OrdinalIgnoreCase));
+      || (caller.Domain is not null && domainAccessPolicy.CanAccess(caller.Domain, agent.Domain));
 
     if (!allowed)
       return Result<AgentDetailResponse>.Failure(ResultStatus.Forbidden, ErrorCodes.DomainForbidden, "Cross-domain access is not allowed by policy.");
 
     var presence = await presenceStore.GetAsync(agentId, cancellationToken);
     return Result<AgentDetailResponse>.Success(agent.ToDetailResponse(presence));
+  }
+
+  public async Task<Result<AgentDiscoveryResponse>> ListAsync(AgentQuery query, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default)
+  {
+    // Order of checks (decision A18): authenticate (401), validate the query (400), domain access (403), data access.
+    if (caller.AgentId is null || caller.Domain is null)
+      return Result<AgentDiscoveryResponse>.Failure(ResultStatus.Unauthorized, ErrorCodes.AuthenticationFailed, "Authentication failed.");
+
+    var discovery = discoveryOptions.Value;
+    var errors = new List<ErrorDetail>();
+
+    var domain = query.Domain?.Trim().ToLowerInvariant();
+    if (domain is not null && !DomainPattern.IsMatch(domain))
+      errors.Add(new ErrorDetail("/domain", "domain is not a valid domain name."));
+
+    if (query.Capability is not null && !CapabilityPattern.IsMatch(query.Capability))
+      errors.Add(new ErrorDetail("/capability", "capability is not a valid capability name."));
+
+    var limit = query.Limit ?? discovery.DefaultPageSize;
+    if (limit < 1 || limit > discovery.MaxPageSize)
+      errors.Add(new ErrorDetail("/limit", $"limit must be between 1 and {discovery.MaxPageSize}."));
+
+    DiscoveryCursorPosition? after = null;
+    if (query.Cursor is not null)
+    {
+      if (DiscoveryCursor.TryDecode(query.Cursor, out var decoded))
+        after = decoded;
+      else
+        errors.Add(new ErrorDetail("/cursor", "cursor is invalid."));
+    }
+
+    if (errors.Count > 0)
+      return Result<AgentDiscoveryResponse>.Failure(ResultStatus.ValidationError, ErrorCodes.ValidationError, "The request is invalid.", errors);
+
+    var effectiveDomain = domain ?? caller.Domain;
+    if (!domainAccessPolicy.CanAccess(caller.Domain, effectiveDomain))
+      return Result<AgentDiscoveryResponse>.Failure(ResultStatus.Forbidden, ErrorCodes.DomainForbidden, "Cross-domain access is not allowed by policy.");
+
+    var page = await unitOfWork.AgentRepository.ListActiveAsync(effectiveDomain, query.Capability, after, limit, cancellationToken);
+
+    // The cursor comes from the last row scanned, before the online filter, so it always advances (decision A16).
+    string? nextCursor = null;
+    if (page.HasMore)
+    {
+      var lastScanned = page.Items[page.Items.Count - 1];
+      nextCursor = DiscoveryCursor.Encode(new DiscoveryCursorPosition(lastScanned.CreatedAt, lastScanned.Id));
+    }
+
+    var agents = page.Items.AsEnumerable();
+    if (query.OnlineOnly && page.Items.Count > 0)
+    {
+      // Redis is touched only for onlineOnly=true. A failure propagates and becomes 500 INTERNAL_ERROR (decision A5).
+      var status = await presenceStore.GetOnlineStatusAsync(page.Items.Select(agent => agent.Id).ToList(), cancellationToken);
+      agents = agents.Where(agent => status[agent.Id]);
+    }
+
+    return Result<AgentDiscoveryResponse>.Success(new AgentDiscoveryResponse(agents.Select(agent => agent.ToCardResponse()).ToList(), nextCursor));
+  }
+
+  public async Task<Result<AgentCapabilitiesResponse>> GetCapabilitiesAsync(Guid agentId, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default)
+  {
+    // Evaluation order is 404 before 403 (decision A17).
+    var agent = await unitOfWork.AgentRepository.GetWithCapabilitiesAsync(agentId, cancellationToken);
+    if (agent is null)
+      return Result<AgentCapabilitiesResponse>.Failure(ResultStatus.NotFound, ErrorCodes.AgentNotFound, "The agent does not exist or has been deregistered.");
+
+    var allowed = caller.AgentId == agent.Id
+      || (caller.Domain is not null && domainAccessPolicy.CanAccess(caller.Domain, agent.Domain));
+    if (!allowed)
+      return Result<AgentCapabilitiesResponse>.Failure(ResultStatus.Forbidden, ErrorCodes.DomainForbidden, "Cross-domain access is not allowed by policy.");
+
+    return Result<AgentCapabilitiesResponse>.Success(new AgentCapabilitiesResponse(agent.Id, agent.ToCapabilityResponses()));
   }
 }

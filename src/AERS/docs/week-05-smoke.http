@@ -1,0 +1,120 @@
+# Week 5 smoke script (Capability Discovery). Run top to bottom against a local API started in Development.
+# After each registration, paste the returned agentId / apiKey into the variables below.
+@Host = http://localhost:5161
+@RegistrationKey = dev-registration-key-change-me
+
+# jobhunt agent (caller of most requests)
+@JobhuntAgentId = 00000000-0000-0000-0000-000000000000
+@JobhuntApiKey = aers_replace_me
+# hr agent (different domain)
+@HrAgentId = 00000000-0000-0000-0000-000000000000
+@HrApiKey = aers_replace_me
+
+### 1. Register a jobhunt agent (201 { agentId, apiKey })
+POST {{Host}}/agents/register
+Content-Type: application/json
+X-Registration-Key: {{RegistrationKey}}
+
+{
+  "agentCard": {
+    "name": "CV Analysis Agent",
+    "domain": "jobhunt",
+    "description": "Analyze a CV against a job",
+    "capabilities": [
+      {
+        "name": "analyze_cv",
+        "description": "Analyze a CV against a job",
+        "inputSchema": { "type": "object", "properties": { "cvText": { "type": "string" } }, "required": ["cvText"] },
+        "outputSchema": { "type": "object", "properties": { "score": { "type": "number" } } }
+      }
+    ],
+    "ownerRef": null
+  }
+}
+
+### 2. Register an hr agent (201)
+POST {{Host}}/agents/register
+Content-Type: application/json
+X-Registration-Key: {{RegistrationKey}}
+
+{
+  "agentCard": {
+    "name": "Payroll Agent",
+    "domain": "hr",
+    "description": "Answers payroll questions",
+    "capabilities": [
+      {
+        "name": "get_payslip",
+        "description": "Returns a payslip",
+        "inputSchema": { "type": "object" },
+        "outputSchema": { "type": "object" }
+      }
+    ]
+  }
+}
+
+### 3. List own domain (200, contains the jobhunt agent, "nextCursor": null)
+GET {{Host}}/agents
+X-Api-Key: {{JobhuntApiKey}}
+
+### 4. List with capability filter (200; exact, case-sensitive match)
+GET {{Host}}/agents?capability=analyze_cv
+X-Api-Key: {{JobhuntApiKey}}
+
+### 5. Capability filter with different case (200, empty list)
+GET {{Host}}/agents?capability=ANALYZE_CV
+X-Api-Key: {{JobhuntApiKey}}
+
+### 6. jobhunt caller asks for the hr domain (403 DOMAIN_FORBIDDEN, no rule jobhunt -> hr)
+GET {{Host}}/agents?domain=hr
+X-Api-Key: {{JobhuntApiKey}}
+
+### 7. hr caller asks for jobhunt (200 in Development: appsettings.Development.json has the rule hr -> jobhunt)
+# Before the rule exists (for example with Environment=Production settings) this returns 403.
+GET {{Host}}/agents?domain=jobhunt
+X-Api-Key: {{HrApiKey}}
+
+### 8. Capabilities of the jobhunt agent, same-domain caller (200 { agentId, capabilities[] })
+GET {{Host}}/agents/{{JobhuntAgentId}}/capabilities
+X-Api-Key: {{JobhuntApiKey}}
+
+### 9. Capabilities of the hr agent, jobhunt caller (403 DOMAIN_FORBIDDEN)
+GET {{Host}}/agents/{{HrAgentId}}/capabilities
+X-Api-Key: {{JobhuntApiKey}}
+
+### 10. Capabilities of an unknown agent (404 AGENT_NOT_FOUND, evaluated before 403)
+GET {{Host}}/agents/11111111-1111-1111-1111-111111111111/capabilities
+X-Api-Key: {{JobhuntApiKey}}
+
+### 11. Capabilities with a malformed id (400 VALIDATION_ERROR)
+GET {{Host}}/agents/not-a-guid/capabilities
+X-Api-Key: {{JobhuntApiKey}}
+
+### 12. Pagination: one agent per page. Copy "nextCursor" into @Cursor and repeat request 13 until it is null.
+GET {{Host}}/agents?limit=1
+X-Api-Key: {{JobhuntApiKey}}
+
+@Cursor = paste_nextCursor_here
+
+### 13. Next page
+GET {{Host}}/agents?limit=1&cursor={{Cursor}}
+X-Api-Key: {{JobhuntApiKey}}
+
+### 14. onlineOnly (200; only agents with a live heartbeat; a page may be shorter than limit)
+GET {{Host}}/agents?onlineOnly=true
+X-Api-Key: {{JobhuntApiKey}}
+
+### 15. Several invalid values at once (400, details.errors lists /domain, /capability, /limit, /cursor)
+GET {{Host}}/agents?domain=Not%20Valid!&capability=1bad&limit=0&cursor=garbage
+X-Api-Key: {{JobhuntApiKey}}
+
+### 16. Type conversion errors (400, paths /onlineOnly and /limit)
+GET {{Host}}/agents?onlineOnly=abc&limit=abc
+X-Api-Key: {{JobhuntApiKey}}
+
+### 17. Registration key on a discovery endpoint (401 AUTHENTICATION_FAILED)
+GET {{Host}}/agents
+X-Registration-Key: {{RegistrationKey}}
+
+### 18. Missing credential (401 AUTHENTICATION_FAILED)
+GET {{Host}}/agents/{{JobhuntAgentId}}/capabilities

@@ -24,6 +24,10 @@ public sealed class AgentConfiguration : IEntityTypeConfiguration<Agent>
     builder.Property(x => x.CreatedAt).HasColumnName("registered_at");
     builder.Property(x => x.DeletedAt).HasColumnName("deregistered_at");
     builder.HasIndex(x => x.Domain);
+    // Serves GET /agents (keyset pagination within one domain, active agents only).
+    builder.HasIndex(x => new { x.Domain, x.CreatedAt, x.Id })
+      .HasDatabaseName("ix_agents_domain_registered_at_id")
+      .HasFilter("deregistered_at IS NULL");
     builder.HasMany(x => x.Capabilities)
       .WithOne(x => x.Agent)
       .HasForeignKey(x => x.AgentId);

@@ -11,4 +11,6 @@ public interface IAgentRegistryService
   Task<Result> HeartbeatAsync(Guid agentId, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default);
   Task<Result> DeregisterAsync(Guid agentId, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default);
   Task<Result<AgentDetailResponse>> GetAsync(Guid agentId, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default);
+  Task<Result<AgentDiscoveryResponse>> ListAsync(AgentQuery query, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default);
+  Task<Result<AgentCapabilitiesResponse>> GetCapabilitiesAsync(Guid agentId, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default);
 }
