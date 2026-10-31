@@ -121,6 +121,14 @@ Options validation runs on start and rejects unknown modes, invalid domains, and
 
 `DiscoveryOptions` is validated on start (`ValidateOnStart`); the app refuses to start with an invalid page-size configuration.
 
+## 7. Integration test infrastructure
+
+The discovery integration fixture uses `WebApplicationFactory<Program>` with isolated PostgreSQL 16 and Redis 7
+Testcontainers. Each test registers unique domains and uses raw JSON assertions for discovery responses. The initial
+coverage includes default domain scoping, empty-result wire shape, cursor pagination, invalid-limit validation, and
+capability schema preservation. Set `AERS_RUN_INTEGRATION_TESTS=1` and ensure Docker is available to run these tests;
+they are skipped by default so the regular unit suite remains independent of container availability.
+
 ## 8. Discovery client (`AERS.AgentClient`)
 
 `AERS.AgentClient` is an independent `net8.0` class library. It communicates with AERS only through `HttpClient`
