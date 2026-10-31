@@ -132,7 +132,18 @@ parameters, and maps non-success responses to `AersApiException`. `AgentHeartbea
 and 5xx failures with a warning while allowing terminal authentication, authorization, and not-found failures to
 propagate.
 
-## 9. How to run and verify
+## 9. Dummy Agent scenario
+
+`AERS.DummyAgent` is a standalone `net8.0` console application that uses only `AERS.AgentClient` over HTTP.
+The `provider` command registers the CV analysis capability and runs heartbeats until Ctrl+C, then deregisters
+gracefully. The `consumer` command registers itself, discovers agents by capability and optional domain/online
+filters, prints page boundaries when requested, displays the discovered schemas, and validates input with
+`JsonSchema.Net`. The `seed` command registers multiple offline agents for pagination demonstrations.
+
+Configuration comes from `appsettings.json` and environment variables (`Aers__BaseUrl`,
+`Aers__RegistrationKey`). API keys are held in memory and only the first eight characters are shown.
+
+## 10. How to run and verify
 
 ```bash
 docker compose -f src/AERS/docker-compose.dev.yml up -d      # PostgreSQL + Redis

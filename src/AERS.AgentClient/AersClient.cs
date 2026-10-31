@@ -55,11 +55,22 @@ public sealed class AersClient
     AgentQuery query,
     [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
   {
+    await foreach (var agent in ListAllAgentsAsync(query, null, ct))
+      yield return agent;
+  }
+
+  public async IAsyncEnumerable<AgentCard> ListAllAgentsAsync(
+    AgentQuery query,
+    Action<int, int>? pageObserver,
+    [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+  {
     ArgumentNullException.ThrowIfNull(query);
     var cursor = (string?)null;
+    var pageNumber = 0;
     do
     {
       var page = await ListAgentsPageAsync(query, cursor, ct);
+      pageObserver?.Invoke(++pageNumber, page.Agents.Count);
       foreach (var agent in page.Agents)
         yield return agent;
       cursor = page.NextCursor;
