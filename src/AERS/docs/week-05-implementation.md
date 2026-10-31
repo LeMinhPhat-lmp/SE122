@@ -121,7 +121,18 @@ Options validation runs on start and rejects unknown modes, invalid domains, and
 
 `DiscoveryOptions` is validated on start (`ValidateOnStart`); the app refuses to start with an invalid page-size configuration.
 
-## 8. How to run and verify
+## 8. Discovery client (`AERS.AgentClient`)
+
+`AERS.AgentClient` is an independent `net8.0` class library. It communicates with AERS only through `HttpClient`
+and defines its own wire contract records, with no reference to the server projects. It supports registration,
+heartbeat, deregistration, agent reads, capability reads, one-page discovery, and automatic cursor traversal.
+
+The client treats `nextCursor` as opaque, sends only one credential header per request, URL-encodes discovery
+parameters, and maps non-success responses to `AersApiException`. `AgentHeartbeatRunner` retries transient network
+and 5xx failures with a warning while allowing terminal authentication, authorization, and not-found failures to
+propagate.
+
+## 9. How to run and verify
 
 ```bash
 docker compose -f src/AERS/docker-compose.dev.yml up -d      # PostgreSQL + Redis

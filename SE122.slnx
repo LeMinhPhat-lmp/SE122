@@ -4,6 +4,7 @@
     <Project Path="test/AERS.UnitTests/AERS.UnitTests.csproj" />
   </Folder>
   <Folder Name="/src/AERS/">
+    <Project Path="src/AERS.AgentClient/AERS.AgentClient.csproj" />
     <Project Path="src/AERS/API/API.csproj" />
     <Project Path="src/AERS/Application/Application.csproj" />
     <Project Path="src/AERS/Domain/Domain.csproj" />

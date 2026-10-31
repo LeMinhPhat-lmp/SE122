@@ -14,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\AERS.AgentClient\AERS.AgentClient.csproj" />
     <ProjectReference Include="..\..\src\AERS\Application\Application.csproj" />
     <ProjectReference Include="..\..\src\AERS\Domain\Domain.csproj" />
   </ItemGroup>
