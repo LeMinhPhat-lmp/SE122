@@ -20,8 +20,7 @@ public static class DependencyInjection
     services.TryAddSingleton(TimeProvider.System);
     services.AddScoped<IAgentRegistryService, AgentRegistryService>();
 
-    // TEMPORARY (task A-05 replaces it with the DomainAccessPolicy from task B-01).
-    services.AddSingleton<IDomainAccessPolicy, TemporaryDomainAccessPolicy>();
+    services.AddSingleton<IDomainAccessPolicy, DomainAccessPolicy>();
 
     // Each layer registers its own IExceptionClassifier; ErrorClassifier runs them all.
     services.AddSingleton<IExceptionClassifier, ApplicationExceptionClassifier>();
@@ -41,7 +40,11 @@ public static class DependencyInjection
   {
     services.AddOptions<AuthOptions>().Bind(configuration.GetSection(AuthOptions.SectionName));
     services.AddOptions<RegistrationLimitsOptions>().Bind(configuration.GetSection(RegistrationLimitsOptions.SectionName));
-    services.AddOptions<AersPolicyOptions>().Bind(configuration.GetSection(AersPolicyOptions.SectionName));
+    services
+      .AddOptions<AersPolicyOptions>()
+      .Bind(configuration.GetSection(AersPolicyOptions.SectionName))
+      .Validate(AersPolicyOptionsValidator.IsValid, "Aers:Policy contains an invalid domain access policy.")
+      .ValidateOnStart();
     services
       .AddOptions<DiscoveryOptions>()
       .Bind(configuration.GetSection(DiscoveryOptions.SectionName))

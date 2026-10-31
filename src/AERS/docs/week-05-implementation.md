@@ -98,8 +98,8 @@ Rules: same domain, or the directed pair `(callerDomain, targetDomain)` listed i
 `DenyByDefault` is the shipped mode and `appsettings.json` has an empty rule list. The sample rule `hr -> jobhunt`
 exists only in `appsettings.Development.json` (and in the test factory). Rules are directed: `hr` agents can read `jobhunt`, not the reverse.
 
-**Status:** until task B-01 is merged, `Application/Policies/TemporaryDomainAccessPolicy.cs` implements the interface (the Week 4 inline rule, unchanged).
-Task A-05 deletes it and registers the B-01 implementation (one line in `Application/Extensions/DependencyInjection.cs`).
+`DomainAccessPolicy` implements the interface as a singleton. It snapshots normalized directed rules at construction, so later mutations to the bound options list do not change its decisions.
+Options validation runs on start and rejects unknown modes, invalid domains, and duplicate normalized rules.
 
 ## 7. Configuration reference
 
