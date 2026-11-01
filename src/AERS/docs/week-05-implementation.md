@@ -98,8 +98,8 @@ Rules: same domain, or the directed pair `(callerDomain, targetDomain)` listed i
 `DenyByDefault` is the shipped mode and `appsettings.json` has an empty rule list. The sample rule `hr -> jobhunt`
 exists only in `appsettings.Development.json` (and in the test factory). Rules are directed: `hr` agents can read `jobhunt`, not the reverse.
 
-**Status:** until task B-01 is merged, `Application/Policies/TemporaryDomainAccessPolicy.cs` implements the interface (the Week 4 inline rule, unchanged).
-Task A-05 deletes it and registers the B-01 implementation (one line in `Application/Extensions/DependencyInjection.cs`).
+`DomainAccessPolicy` implements the interface as a singleton. It snapshots normalized directed rules at construction, so later mutations to the bound options list do not change its decisions.
+Options validation runs on start and rejects unknown modes, invalid domains, and duplicate normalized rules.
 
 ## 7. Configuration reference
 
@@ -121,7 +121,37 @@ Task A-05 deletes it and registers the B-01 implementation (one line in `Applica
 
 `DiscoveryOptions` is validated on start (`ValidateOnStart`); the app refuses to start with an invalid page-size configuration.
 
-## 8. How to run and verify
+## 7. Integration test infrastructure
+
+The discovery integration fixture uses `WebApplicationFactory<Program>` with isolated PostgreSQL 16 and Redis 7
+Testcontainers. Each test registers unique domains and uses raw JSON assertions for discovery responses. The initial
+coverage includes default domain scoping, empty-result wire shape, cursor pagination, invalid-limit validation, and
+capability schema preservation. Set `AERS_RUN_INTEGRATION_TESTS=1` and ensure Docker is available to run these tests;
+they are skipped by default so the regular unit suite remains independent of container availability.
+
+## 8. Discovery client (`AERS.AgentClient`)
+
+`AERS.AgentClient` is an independent `net8.0` class library. It communicates with AERS only through `HttpClient`
+and defines its own wire contract records, with no reference to the server projects. It supports registration,
+heartbeat, deregistration, agent reads, capability reads, one-page discovery, and automatic cursor traversal.
+
+The client treats `nextCursor` as opaque, sends only one credential header per request, URL-encodes discovery
+parameters, and maps non-success responses to `AersApiException`. `AgentHeartbeatRunner` retries transient network
+and 5xx failures with a warning while allowing terminal authentication, authorization, and not-found failures to
+propagate.
+
+## 9. Dummy Agent scenario
+
+`AERS.DummyAgent` is a standalone `net8.0` console application that uses only `AERS.AgentClient` over HTTP.
+The `provider` command registers the CV analysis capability and runs heartbeats until Ctrl+C, then deregisters
+gracefully. The `consumer` command registers itself, discovers agents by capability and optional domain/online
+filters, prints page boundaries when requested, displays the discovered schemas, and validates input with
+`JsonSchema.Net`. The `seed` command registers multiple offline agents for pagination demonstrations.
+
+Configuration comes from `appsettings.json` and environment variables (`Aers__BaseUrl`,
+`Aers__RegistrationKey`). API keys are held in memory and only the first eight characters are shown.
+
+## 10. How to run and verify
 
 ```bash
 docker compose -f src/AERS/docker-compose.dev.yml up -d      # PostgreSQL + Redis
