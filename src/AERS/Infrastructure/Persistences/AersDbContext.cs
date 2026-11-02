@@ -11,6 +11,8 @@ public class AersDbContext(DbContextOptions<AersDbContext> options) : DbContext(
   public DbSet<AgentCapability> AgentCapabilities { get; set; }
   public DbSet<AgentCredential> AgentCredentials { get; set; }
   public DbSet<AuditEvent> AuditEvents { get; set; }
+  public DbSet<AgentTask> AgentTasks { get; set; }
+  public DbSet<TaskStatusHistory> TaskStatusHistories { get; set; }
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {

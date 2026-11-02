@@ -1,0 +1,90 @@
+# Week 6 smoke script (REST only). Run top to bottom against a local API started in Development.
+# The hub (/hubs/agent) cannot be called from a .http file: use the HubProbe tool, see week-06-implementation.md section 10.
+# After each registration paste the returned agentId / apiKey into the variables below.
+@Host = http://localhost:5161
+@RegistrationKey = dev-registration-key-change-me
+
+# Agent A (caller), domain jobhunt
+@AgentA = 00000000-0000-0000-0000-000000000000
+@KeyA = aers_replace_me
+# Agent B (target), domain jobhunt
+@AgentB = 00000000-0000-0000-0000-000000000000
+@KeyB = aers_replace_me
+# Agent C (third agent, no part in the task)
+@KeyC = aers_replace_me
+# Id of a task created through the hub (printed by HubProbe)
+@TaskId = 00000000-0000-0000-0000-000000000000
+
+### 1. Register agent A (201 { agentId, apiKey })
+POST {{Host}}/agents/register
+Content-Type: application/json
+X-Registration-Key: {{RegistrationKey}}
+
+{
+  "agentCard": {
+    "name": "Agent A", "domain": "jobhunt", "description": "Caller",
+    "capabilities": [
+      { "name": "echo", "description": "Echo", "inputSchema": { "type": "object" }, "outputSchema": { "type": "object" } }
+    ]
+  }
+}
+
+### 2. Register agent B (same body, name "Agent B"); capability analyze_cv has a strict input schema
+POST {{Host}}/agents/register
+Content-Type: application/json
+X-Registration-Key: {{RegistrationKey}}
+
+{
+  "agentCard": {
+    "name": "Agent B", "domain": "jobhunt", "description": "Target",
+    "capabilities": [
+      { "name": "echo", "description": "Echo", "inputSchema": { "type": "object" }, "outputSchema": { "type": "object" } },
+      {
+        "name": "analyze_cv", "description": "Analyze a CV",
+        "inputSchema": { "type": "object", "properties": { "cvText": { "type": "string" } }, "required": ["cvText"], "additionalProperties": false },
+        "outputSchema": { "type": "object", "properties": { "score": { "type": "number" } } }
+      }
+    ]
+  }
+}
+
+### 3. Register agent C (same body as A, name "Agent C")
+POST {{Host}}/agents/register
+Content-Type: application/json
+X-Registration-Key: {{RegistrationKey}}
+
+{
+  "agentCard": {
+    "name": "Agent C", "domain": "jobhunt", "description": "Third agent",
+    "capabilities": [
+      { "name": "echo", "description": "Echo", "inputSchema": { "type": "object" }, "outputSchema": { "type": "object" } }
+    ]
+  }
+}
+
+### 4. GET /tasks/{id} as the caller (200, no input / ancestorChain / deadlineAt)
+GET {{Host}}/tasks/{{TaskId}}
+X-Api-Key: {{KeyA}}
+
+### 5. GET /tasks/{id} as the target (200)
+GET {{Host}}/tasks/{{TaskId}}
+X-Api-Key: {{KeyB}}
+
+### 6. GET /tasks/{id} as a third agent (403 TASK_ACCESS_FORBIDDEN)
+GET {{Host}}/tasks/{{TaskId}}
+X-Api-Key: {{KeyC}}
+
+### 7. Unknown id (404 TASK_NOT_FOUND)
+GET {{Host}}/tasks/11111111-1111-4111-8111-111111111111
+X-Api-Key: {{KeyA}}
+
+### 8. Malformed id (400 VALIDATION_ERROR)
+GET {{Host}}/tasks/not-a-uuid
+X-Api-Key: {{KeyA}}
+
+### 9. No key (401 AUTHENTICATION_FAILED)
+GET {{Host}}/tasks/{{TaskId}}
+
+### 10. Registration key is not accepted here (401)
+GET {{Host}}/tasks/{{TaskId}}
+X-Api-Key: {{RegistrationKey}}

@@ -2,12 +2,17 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using API.Authentication;
 using API.Exceptions;
+using API.Realtime;
 using Application.Constants;
 using Application.DTOs.Result.Enums;
 using Application.DTOs.Result.Responses;
 using Application.Interfaces.Errors;
+using Application.Interfaces.Realtime;
+using Application.Options;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace API.Extensions;
 
@@ -62,6 +67,27 @@ public static class DependencyInjection
 
     // The API layer contributes the classifier for the exceptions only it knows about.
     services.AddSingleton<IExceptionClassifier, BadHttpRequestExceptionClassifier>();
+
+    return services;
+  }
+
+  // SignalR hub at /hubs/agent (decisions A21 to A23, A32). The JSON protocol is camelCase and writes explicit nulls,
+  // because the contract says optional values are present with null.
+  public static IServiceCollection AddApiRealtime(this IServiceCollection services)
+  {
+    services
+      .AddSignalR()
+      .AddJsonProtocol(options =>
+      {
+        options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
+      });
+
+    services
+      .AddOptions<HubOptions>()
+      .Configure<IOptions<RelayOptions>>((hubOptions, relayOptions) => hubOptions.MaximumReceiveMessageSize = relayOptions.Value.MaxMessageBytes);
+
+    services.AddSingleton<IMessageRelay, SignalRMessageRelay>();
 
     return services;
   }

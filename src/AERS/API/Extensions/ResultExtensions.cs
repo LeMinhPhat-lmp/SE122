@@ -20,6 +20,7 @@ public static class ResultExtensions
     ResultStatus.Forbidden => StatusCodes.Status403Forbidden,
     ResultStatus.NotFound => StatusCodes.Status404NotFound,
     ResultStatus.Conflict => StatusCodes.Status409Conflict,
+    ResultStatus.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
     _ => StatusCodes.Status500InternalServerError
   };
 

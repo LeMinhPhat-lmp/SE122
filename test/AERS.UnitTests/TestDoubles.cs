@@ -50,6 +50,8 @@ internal sealed class FakeUnitOfWork(IAgentRepository agentRepository) : IUnitOf
   public IAgentCapabilityRepository AgentCapabilityRepository => throw new NotSupportedException();
   public IAgentCredentialRepository AgentCredentialRepository => throw new NotSupportedException();
   public IAuditEventRepository AuditEventRepository => throw new NotSupportedException();
+  public ITaskRepository TaskRepository => throw new NotImplementedException();
+
   public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
   public Task<ITransaction> StartTransaction(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }

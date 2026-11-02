@@ -14,6 +14,9 @@ public abstract class RedisStoreBase(IConnectionMultiplexer redis, IOptions<Redi
 {
   protected string KeyPrefix => options.Value.KeyPrefix;
 
+  /// <summary>For the few operations that are not tied to one database, such as scanning every server.</summary>
+  protected IConnectionMultiplexer Multiplexer => redis;
+
   protected async Task<T> ExecuteAsync<T>(Func<IDatabase, Task<T>> operation, CancellationToken cancellationToken)
   {
     cancellationToken.ThrowIfCancellationRequested();

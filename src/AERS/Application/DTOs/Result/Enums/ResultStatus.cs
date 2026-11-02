@@ -9,5 +9,6 @@ public enum ResultStatus
   Conflict,
   Unauthorized,
   Forbidden,
-  InternalError
+  InternalError,
+  ServiceUnavailable
 }

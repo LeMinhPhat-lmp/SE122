@@ -1,9 +1,12 @@
 using API.Extensions;
+using API.Realtime;
 using Application.Extensions;
+using Application.Interfaces.Runtime;
 using Application.Options;
 using Infrastructure.Extensions;
 using Infrastructure.Persistences;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +22,7 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 // From API layer
 builder.Services.AddApiServices();
 builder.Services.AddApiAuthentication();
+builder.Services.AddApiRealtime();
 
 // From Infrastructure layer
 builder.Services.AddInfrastructureServices();
@@ -38,6 +42,22 @@ if (app.Environment.IsDevelopment())
   await scope.ServiceProvider.GetRequiredService<AersDbContext>().Database.MigrateAsync();
 }
 
+// Decision A31: SignalR silently drops messages for unknown connection ids, so a connection mapping left over from a
+// previous run of this instance would hide TARGET_UNAVAILABLE. Purge them before accepting connections.
+using (var purgeScope = app.Services.CreateScope())
+{
+  var instanceId = purgeScope.ServiceProvider.GetRequiredService<IOptions<InstanceOptions>>().Value.Id;
+  try
+  {
+    await purgeScope.ServiceProvider.GetRequiredService<IConnectionRegistry>().PurgeInstanceAsync(instanceId);
+  }
+  catch (Exception ex)
+  {
+    // Consistent with AbortOnConnectFail = false: the app starts even if Redis is down.
+    app.Logger.LogWarning(ex, "Could not purge the stale connection mappings of instance {InstanceId} at startup.", instanceId);
+  }
+}
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -51,6 +71,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<AgentHub>("/hubs/agent");
 
 app.Run();
 
