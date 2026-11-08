@@ -1,5 +1,7 @@
 <Solution>
-  <Folder Name="/src/" />
+  <Folder Name="/src/">
+    <Project Path="src/AERS.HubProbe/AERS.HubProbe.csproj" />
+  </Folder>
   <Folder Name="/test/">
     <Project Path="test/AERS.UnitTests/AERS.UnitTests.csproj" />
   </Folder>

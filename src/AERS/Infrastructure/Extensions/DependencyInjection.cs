@@ -32,6 +32,7 @@ public static class DependencyInjection
     services.AddScoped<IAgentCapabilityRepository, AgentCapabilityRepository>();
     services.AddScoped<IAgentCredentialRepository, AgentCredentialRepository>();
     services.AddScoped<IAuditEventRepository, AuditEventRepository>();
+    services.AddScoped<ITaskRepository, TaskRepository>();
     services.AddScoped<IUnitOfWork, UnitOfWork>();
 
     
@@ -44,11 +45,13 @@ public static class DependencyInjection
       return ConnectionMultiplexer.Connect(configuration);
     });
     services.AddScoped<IAgentPresenceStore, RedisAgentPresenceStore>();
+    services.AddScoped<IConnectionRegistry, RedisConnectionRegistry>();
     services.AddScoped<IDependencyHealthChecker, DependencyHealthChecker>();
 
     services.AddSingleton<IApiKeyService, ApiKeyService>();
     services.AddSingleton<IRegistrationKeyValidator, RegistrationKeyValidator>();
     services.AddSingleton<ISchemaMetaValidator, JsonSchemaMetaValidator>();
+    services.AddSingleton<IInputSchemaValidator, JsonSchemaInputValidator>();
 
     return services;
   }

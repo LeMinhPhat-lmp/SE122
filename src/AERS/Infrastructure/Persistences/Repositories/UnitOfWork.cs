@@ -8,12 +8,14 @@ public sealed class UnitOfWork(
   IAgentCapabilityRepository agentCapabilityRepository,
   IAgentCredentialRepository agentCredentialRepository,
   IAgentRepository agentRepository,
-  IAuditEventRepository auditEventRepository) : IUnitOfWork
+  IAuditEventRepository auditEventRepository,
+  ITaskRepository taskRepository) : IUnitOfWork
 {
   public IAgentCapabilityRepository AgentCapabilityRepository => agentCapabilityRepository;
   public IAgentCredentialRepository AgentCredentialRepository => agentCredentialRepository;
   public IAgentRepository AgentRepository => agentRepository;
   public IAuditEventRepository AuditEventRepository => auditEventRepository;
+  public ITaskRepository TaskRepository => taskRepository;
 
   public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
   {

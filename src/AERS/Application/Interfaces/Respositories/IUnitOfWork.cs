@@ -6,6 +6,7 @@ public interface IUnitOfWork
   IAgentCredentialRepository AgentCredentialRepository { get; }
   IAgentRepository AgentRepository { get; }
   IAuditEventRepository AuditEventRepository { get; }
+  ITaskRepository TaskRepository { get; }
 
   Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
   Task<ITransaction> StartTransaction(CancellationToken cancellationToken = default);
