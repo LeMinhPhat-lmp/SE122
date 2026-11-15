@@ -15,8 +15,28 @@ namespace API.Authentication;
 public abstract class AgentAuthenticationHandlerBase(
   IOptionsMonitor<AuthenticationSchemeOptions> options,
   ILoggerFactory logger,
-  UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+  UrlEncoder encoder,
+  AuthFailureLogLimiter logLimiter) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
+  public const string Missing = "missing";
+  public const string Malformed = "malformed";
+  public const string UnknownOrRevoked = "unknown_or_revoked";
+
+  /// <summary>
+  /// ADR-W8-04: one rate limited structured warning, never the credential (raw or hashed), never a header, and nothing in the
+  /// database (a flood would fill audit_events).
+  /// </summary>
+  protected void LogFailure(string failureClass)
+  {
+    var remote = Context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    if (!logLimiter.ShouldLog(remote, failureClass))
+      return;
+
+    Logger.LogWarning(
+      "Authentication failed: scheme {Scheme}, reason {Reason}, path {Path}, remote address {RemoteAddress}, hub {IsHub}.",
+      Scheme.Name, failureClass, Request.Path.Value, remote, Request.Path.StartsWithSegments("/hubs"));
+  }
+
   protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
   {
     await Response.WriteErrorAsync(

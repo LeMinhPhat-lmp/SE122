@@ -8,8 +8,11 @@ public static class TaskMessageTypes
   public const string Result = "task.result";
   public const string StatusEvent = "task.status_event";
 
-  /// <summary>Message types a client may send to the hub.</summary>
-  public static readonly IReadOnlySet<string> ClientToServer = new HashSet<string>(StringComparer.Ordinal) { Create, Result, StatusEvent };
+  /// <summary>Client to server confirmation that a terminal task.result was processed (ADR-W7-02).</summary>
+  public const string Ack = "task.ack";
 
-  public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Create, Invoke, Result, StatusEvent };
+  /// <summary>Message types a client may send to the hub.</summary>
+  public static readonly IReadOnlySet<string> ClientToServer = new HashSet<string>(StringComparer.Ordinal) { Create, Result, StatusEvent, Ack };
+
+  public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal) { Create, Invoke, Result, StatusEvent, Ack };
 }

@@ -10,5 +10,6 @@ public enum ResultStatus
   Unauthorized,
   Forbidden,
   InternalError,
-  ServiceUnavailable
+  ServiceUnavailable,
+  TooManyRequests
 }

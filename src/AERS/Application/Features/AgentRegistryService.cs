@@ -31,6 +31,7 @@ public sealed class AgentRegistryService(
   IOptions<AersPolicyOptions> policyOptions,
   IOptions<DiscoveryOptions> discoveryOptions,
   IDomainAccessPolicy domainAccessPolicy,
+  IConnectionTerminator connectionTerminator,
   TimeProvider timeProvider,
   ILogger<AgentRegistryService> logger) : IAgentRegistryService
 {
@@ -127,6 +128,9 @@ public sealed class AgentRegistryService(
     {
       logger.LogWarning(ex, "Could not remove presence keys for agent {AgentId} during deregistration.", agentId);
     }
+
+    // ADR-W8-03: tell every instance to abort the agent's open hub connection. Best effort, never throws; the 204 does not depend on it.
+    await connectionTerminator.TerminateAsync(agentId, cancellationToken);
 
     return Result.Success();
   }

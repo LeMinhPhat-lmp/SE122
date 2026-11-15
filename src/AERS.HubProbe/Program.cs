@@ -1,18 +1,24 @@
 // Manual-testing harness for the AERS hub. Talks to the server only over the network.
 //
 //   serve --url http://localhost:5161 --key <apiKey> --behavior echo|fail|slow|forward [--forward-target <agentId>] [--delay-ms 3000]
-//   call  --url http://localhost:5161 --key <apiKey> --target <agentId> --capability echo --input '{"message":"hi"}' [--parent <taskId>] [--wait 15]
+//   call  --url http://localhost:5161 --key <apiKey> --target <agentId> --capability echo --input '{"message":"hi"}' [--parent <taskId>] [--wait 15] [--repeat 1]
+//   watch --url http://localhost:5161 --key <apiKey> [--auto-ack true]       connect, print everything that arrives, stay connected
+//   ack   --url http://localhost:5161 --key <apiKey> --task <taskId>          send task.ack for one task and exit
 //   call  ... --type <messageType> --raw '<payload json>'      (negative tests, sends the payload exactly as given)
 //
 // "serve" connects as an agent, answers every task.invoke according to --behavior and stays connected until Ctrl+C.
-// "call" connects as an agent, sends one task.create, prints the ack and waits for the pushed task.result.
+// "call" connects as an agent, sends task.create (--repeat times), prints the acks and waits for the pushed task.result.
+//
+// Week 7 options: --auto-ack true sends task.ack for every received task.result (default false, so redelivery can be observed).
+// Extra serve behaviors: silent (receive and never answer), orphan-root (like forward but WITHOUT parentTaskId),
+// reconnect (drop the connection on task.invoke, come back after --reconnect-after-ms, then answer).
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 
 var options = ParseArguments(args, out var command);
-if (command is not ("serve" or "call") || !options.ContainsKey("url") || !options.ContainsKey("key"))
+if (command is not ("serve" or "call" or "watch" or "ack") || !options.ContainsKey("url") || !options.ContainsKey("key"))
 {
   Console.WriteLine("Usage: serve|call --url <baseUrl> --key <apiKey> [command options]. See the header of Program.cs.");
   return 1;
@@ -45,6 +51,22 @@ catch (Exception ex)
 
 Console.WriteLine($"CONNECTED as the agent that owns this key (connection id {connection.ConnectionId}).");
 
+var autoAck = options.GetValueOrDefault("auto-ack", "false") == "true";
+
+if (command == "watch")
+{
+  Console.WriteLine($"Watching (auto-ack {autoAck}). Press Ctrl+C to stop.");
+  await Task.Delay(Timeout.Infinite);
+  return 0;
+}
+
+if (command == "ack")
+{
+  Print("ACK", await SendAsync("task.ack", new { taskId = options["task"] }));
+  await connection.StopAsync();
+  return 0;
+}
+
 if (command == "serve")
 {
   Console.WriteLine($"Serving with behavior '{behavior}'. Press Ctrl+C to stop.");
@@ -70,13 +92,28 @@ else
   };
 }
 
+var repeat = int.Parse(options.GetValueOrDefault("repeat", "1"));
 var ack = await SendAsync(outgoingType, outgoingPayload);
 Print("ACK", ack);
+
+// --repeat N sends N-1 more identical envelopes (rate limit tests) and prints one line per ack.
+for (var i = 1; i < repeat; i++)
+{
+  var extra = await SendAsync(outgoingType, outgoingPayload);
+  Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] ACK #{i + 1}: {extra.GetRawText()}");
+}
 
 // Only a task.create produces a pushed task.result for this connection.
 if (outgoingType == "task.create" && ack.GetProperty("accepted").GetBoolean() && ack.GetProperty("taskId").GetString() is { } createdTaskId)
 {
   var wait = TimeSpan.FromSeconds(int.Parse(options.GetValueOrDefault("wait", "15")));
+  if (wait == TimeSpan.Zero)
+  {
+    Console.WriteLine($"Not waiting (--wait 0). Task id: {createdTaskId}");
+    await connection.StopAsync();
+    return 0;
+  }
+
   var finished = await Task.WhenAny(ResultFor(createdTaskId).Task, Task.Delay(wait));
   if (finished == ResultFor(createdTaskId).Task)
     Print("RESULT (pushed)", ResultFor(createdTaskId).Task.Result);
@@ -104,6 +141,8 @@ async Task OnReceiveAsync(JsonElement envelope)
   if (messageType == "task.result")
   {
     ResultFor(payload.GetProperty("taskId").GetString()!).TrySetResult(payload.Clone());
+    if (autoAck)
+      Print("SEND task.ack", await SendAsync("task.ack", new { taskId = payload.GetProperty("taskId").GetString() }));
     return;
   }
 
@@ -122,6 +161,31 @@ async Task OnReceiveAsync(JsonElement envelope)
 
     case "slow":
       await Task.Delay(int.Parse(options.GetValueOrDefault("delay-ms", "3000")));
+      result = new { taskId, status = "completed", output = new { echo = taskInput }, error = (object?)null };
+      break;
+
+    case "silent":
+      Console.WriteLine("Silent behavior: the task is received and never answered.");
+      return;
+
+    case "reconnect":
+      Console.WriteLine("Reconnect behavior: dropping the connection.");
+      await connection.StopAsync();
+      await Task.Delay(int.Parse(options.GetValueOrDefault("reconnect-after-ms", "10000")));
+      await connection.StartAsync();
+      Console.WriteLine($"Reconnected (connection id {connection.ConnectionId}); answering now.");
+      result = new { taskId, status = "completed", output = new { echo = taskInput }, error = (object?)null };
+      break;
+
+    case "orphan-root":
+      var orphanAck = await SendAsync("task.create", new
+      {
+        targetAgentId = options["forward-target"],
+        capability = "echo",
+        input = taskInput,
+        parentTaskId = (string?)null
+      });
+      Print("ORPHAN ROOT ACK", orphanAck);
       result = new { taskId, status = "completed", output = new { echo = taskInput }, error = (object?)null };
       break;
 

@@ -3,6 +3,7 @@ using Application.Exceptions;
 using Application.Interfaces.Errors;
 using Application.Interfaces.Features;
 using Application.Interfaces.Policies;
+using Application.Interfaces.Realtime;
 using Application.Policies;
 using Application.Options;
 using Application.Services;
@@ -22,6 +23,8 @@ public static class DependencyInjection
     services.AddScoped<IAgentRegistryService, AgentRegistryService>();
     services.AddScoped<ITaskService, TaskService>();
     services.AddScoped<ITaskMessageService, TaskMessageService>();
+    services.AddScoped<ITaskNotifier, TaskNotifier>();
+    services.AddScoped<ITaskRecoveryService, TaskRecoveryService>();
 
     services.AddSingleton<IDomainAccessPolicy, DomainAccessPolicy>();
     services.AddSingleton<ITaskPolicyEvaluator, TaskPolicyEvaluator>();

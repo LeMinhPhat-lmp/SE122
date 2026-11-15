@@ -5,18 +5,17 @@ using Application.DTOs.Result.Responses;
 using Application.DTOs.Tasks;
 using Application.Interfaces.Features;
 using Application.Interfaces.Realtime;
-using Application.Interfaces.Runtime;
 using Application.Mappings;
 using Application.Models;
 using Application.Tasks;
+using Domain.Enums;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
 
 public sealed class TaskMessageService(
   ITaskService taskService,
-  IConnectionRegistry connectionRegistry,
-  IMessageRelay messageRelay,
+  ITaskNotifier taskNotifier,
   ILogger<TaskMessageService> logger) : ITaskMessageService
 {
   public async Task<EnvelopeAck> HandleAsync(TaskEnvelope envelope, AuthenticatedAgentContext sender, CancellationToken cancellationToken = default)
@@ -34,6 +33,7 @@ public sealed class TaskMessageService(
       {
         TaskMessageTypes.Create => await HandleCreateAsync(envelope.Payload, sender, cancellationToken),
         TaskMessageTypes.Result => await HandleResultAsync(envelope.Payload, sender, cancellationToken),
+        TaskMessageTypes.Ack => await HandleAckAsync(envelope.Payload, sender, cancellationToken),
         _ => await HandleStatusEventAsync(envelope.Payload, sender, cancellationToken)
       };
     }
@@ -63,9 +63,12 @@ public sealed class TaskMessageService(
     if (!dispatched.IsSuccess)
       return Reject(dispatched);
 
+    // The notifier is best effort and never throws, so no push can change the ack (A29, A41).
     var outcome = dispatched.Data!;
     if (outcome.ResultToPush is not null)
-      await PushResultAsync(outcome.CallerAgentId, outcome.ResultToPush, cancellationToken);
+      await taskNotifier.NotifyResultAsync(outcome.CallerAgentId, outcome.ResultToPush, cancellationToken);
+    else if (outcome.Status == AgentTaskStatus.Working)
+      await taskNotifier.NotifyWorkingAsync(outcome.CallerAgentId, outcome.TaskId, cancellationToken);
 
     return new EnvelopeAck(true, outcome.TaskId.ToString(), outcome.Status.ToWire(), outcome.Error);
   }
@@ -82,8 +85,22 @@ public sealed class TaskMessageService(
 
     // Best effort: the target's ack is never changed by what happens to the caller's push (decision A29).
     var outcome = received.Data!;
-    await PushResultAsync(outcome.CallerAgentId, outcome.ResultToForward, cancellationToken);
+    await taskNotifier.NotifyResultAsync(outcome.CallerAgentId, outcome.ResultToForward, cancellationToken);
 
+    return new EnvelopeAck(true, outcome.TaskId.ToString(), outcome.Status.ToWire(), null);
+  }
+
+  private async Task<EnvelopeAck> HandleAckAsync(JsonElement payload, AuthenticatedAgentContext sender, CancellationToken cancellationToken)
+  {
+    var parsed = EnvelopePayloadParser.ParseAck(payload);
+    if (!parsed.IsSuccess)
+      return Reject(parsed);
+
+    var acknowledged = await taskService.AcknowledgeAsync(parsed.Data!, sender, cancellationToken);
+    if (!acknowledged.IsSuccess)
+      return Reject(acknowledged);
+
+    var outcome = acknowledged.Data!;
     return new EnvelopeAck(true, outcome.TaskId.ToString(), outcome.Status.ToWire(), null);
   }
 
@@ -99,26 +116,6 @@ public sealed class TaskMessageService(
 
     var outcome = received.Data!;
     return new EnvelopeAck(true, outcome.TaskId.ToString(), outcome.Status.ToWire(), null);
-  }
-
-  private async Task PushResultAsync(Guid agentId, TaskResult result, CancellationToken cancellationToken)
-  {
-    try
-    {
-      var connection = await connectionRegistry.ResolveAsync(agentId, cancellationToken);
-      if (connection is null)
-      {
-        logger.LogInformation("Agent {AgentId} has no connection; the result of task {TaskId} stays available through GET /tasks.", agentId, result.TaskId);
-        return;
-      }
-
-      var envelope = new TaskEnvelope(TaskMessageTypes.Result, null, JsonSerializer.SerializeToElement(result, EnvelopeJson.Options));
-      await messageRelay.SendAsync(connection, envelope, cancellationToken);
-    }
-    catch (Exception ex) when (ex is not OperationCanceledException)
-    {
-      logger.LogWarning(ex, "Could not push the result of task {TaskId} to agent {AgentId}.", result.TaskId, agentId);
-    }
   }
 
   // Known type, a direction clients may use, and an object payload (decisions A22, A23, A37).
