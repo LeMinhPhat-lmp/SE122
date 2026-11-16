@@ -1,0 +1,35 @@
+{
+  "agentCard": {
+    "name": "Recommendation Agent",
+    "domain": "jobhunt",
+    "description": "Combines fixture search and CV signals with no LLM.",
+    "ownerRef": null,
+    "capabilities": [
+      {
+        "name": "recommend_jobs",
+        "description": "Ranks fixture jobs for a CV and optional filters.",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "cvText": { "type": "string", "description": "CV text to match.", "minLength": 1, "maxLength": 20000 },
+            "keywords": { "type": "array", "description": "One to ten desired job terms.", "minItems": 1, "maxItems": 10, "items": { "type": "string", "minLength": 1, "maxLength": 50 } },
+            "location": { "type": "string", "description": "Optional location filter.", "minLength": 1, "maxLength": 100 },
+            "maxResults": { "type": "integer", "description": "Maximum recommendations to return.", "minimum": 1, "maximum": 10 }
+          },
+          "required": ["cvText", "keywords"],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "recommendations": { "type": "array", "description": "Ranked fixture recommendations.", "items": { "type": "object", "properties": { "jobId": { "type": "string", "description": "Stable fixture job identifier." }, "title": { "type": "string", "description": "Job title." }, "company": { "type": "string", "description": "Company name." }, "fitScore": { "type": "number", "description": "CV fit score from 0 to 100.", "minimum": 0, "maximum": 100 }, "companyRating": { "type": "number", "description": "Company rating from 0 to 5.", "minimum": 0, "maximum": 5 } }, "required": ["jobId", "title", "company", "fitScore", "companyRating"], "additionalProperties": false } }
+          },
+          "required": ["recommendations"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+@AersUrl = http://localhost:5161
+@RegistrationKey = integration-registration-key
+
+### Job Search Agent
+POST {{AersUrl}}/agents/register
+X-Registration-Key: {{RegistrationKey}}
+Content-Type: application/json
+
+< ./job-search.agent-card.json
+
+### CV Analysis Agent
+POST {{AersUrl}}/agents/register
+X-Registration-Key: {{RegistrationKey}}
+Content-Type: application/json
+
+< ./cv-analysis.agent-card.json
+
+### Company Research Agent
+POST {{AersUrl}}/agents/register
+X-Registration-Key: {{RegistrationKey}}
+Content-Type: application/json
+
+< ./company-research.agent-card.json
+
+### Recommendation Agent
+POST {{AersUrl}}/agents/register
+X-Registration-Key: {{RegistrationKey}}
+Content-Type: application/json
+
+< ./recommendation.agent-card.json

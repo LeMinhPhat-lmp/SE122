@@ -1,0 +1,36 @@
+{
+  "agentCard": {
+    "name": "Company Research Agent",
+    "domain": "jobhunt",
+    "description": "Researches fixture company data with no LLM.",
+    "ownerRef": null,
+    "capabilities": [
+      {
+        "name": "research_company",
+        "description": "Returns a deterministic fixture profile for a company.",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "companyName": { "type": "string", "description": "Company name to research.", "minLength": 1, "maxLength": 100 }
+          },
+          "required": ["companyName"],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "companyName": { "type": "string", "description": "Resolved company name." },
+            "industry": { "type": "string", "description": "Company industry." },
+            "sizeBand": { "type": "string", "description": "Company size band.", "enum": ["small", "medium", "large"] },
+            "summary": { "type": "string", "description": "Company summary." },
+            "rating": { "type": "number", "description": "Fixture rating from 0 to 5.", "minimum": 0, "maximum": 5 }
+          },
+          "required": ["companyName", "industry", "sizeBand", "summary", "rating"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}
