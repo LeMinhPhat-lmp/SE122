@@ -94,3 +94,16 @@ assertions belong to the B-05 integration pass.
 ADR-W7-03, ADR-W8-01, ADR-W8-02, and ADR-W8-03 were not present as Accepted
 ADRs in the repository. Their suggested defaults are therefore marked
 **PROVISIONAL** and documented in [week-07-demo.md](week-07-demo.md).
+
+## B-05 async integration test matrix
+
+`test/AERS.UnitTests/AsyncIntegrationTests.cs` preserves IDs IT-W7-01 through
+IT-W7-30. IT-W7-30 reruns the available Week 6 `404 before 403` regression.
+The remaining tests are explicit skips, not false-positive placeholders:
+the current production baseline does not yet provide the A-02 timeout worker,
+Redis runtime-state store, ADR-W7-02 acknowledged-result recovery,
+ADR-W7-03 disconnect grace worker, or the real SignalR integration helper.
+
+The four required ADRs were still `Proposed`; this pass uses their suggested
+defaults provisionally, as authorized by the owner. The skipped tests should
+be enabled once the corresponding A-02/A-03/A-04 prerequisites are delivered.
