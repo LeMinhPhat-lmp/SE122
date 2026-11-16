@@ -1,4 +1,5 @@
 using Application.Interfaces.Repositories;
+using Application.Interfaces.Policies;
 using Application.Interfaces.Runtime;
 using Application.Interfaces.Security;
 using Application.Interfaces.Validation;
@@ -46,6 +47,7 @@ public static class DependencyInjection
     });
     services.AddScoped<IAgentPresenceStore, RedisAgentPresenceStore>();
     services.AddScoped<IConnectionRegistry, RedisConnectionRegistry>();
+    services.AddScoped<IRateLimiter, RedisRateLimiter>();
     services.AddScoped<IDependencyHealthChecker, DependencyHealthChecker>();
 
     services.AddSingleton<IApiKeyService, ApiKeyService>();

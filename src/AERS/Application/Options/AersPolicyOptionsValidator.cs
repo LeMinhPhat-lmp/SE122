@@ -6,6 +6,12 @@ public static partial class AersPolicyOptionsValidator
 {
   public static bool IsValid(AersPolicyOptions options)
   {
+    if (options.MaxRecursionDepth < 1
+      || options.RateLimit is null
+      || options.RateLimit.WindowSeconds < 1
+      || options.RateLimit.MaxTasksPerWindow < 1)
+      return false;
+
     if (options.DomainPolicy is null
       || !string.Equals(options.DomainPolicy.Mode, "DenyByDefault", StringComparison.Ordinal))
       return false;

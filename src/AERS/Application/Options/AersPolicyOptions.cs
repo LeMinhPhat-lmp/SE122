@@ -5,6 +5,8 @@ public sealed class AersPolicyOptions
   public const string SectionName = "Aers:Policy";
   public HeartbeatOptions Heartbeat { get; set; } = new();
   public DomainPolicyOptions DomainPolicy { get; set; } = new();
+  public int MaxRecursionDepth { get; set; } = 5;
+  public RateLimitOptions RateLimit { get; set; } = new();
 
   public sealed class HeartbeatOptions
   {
@@ -16,6 +18,12 @@ public sealed class AersPolicyOptions
   {
     public string Mode { get; set; } = "DenyByDefault";
     public List<CrossDomainRule> CrossDomainRules { get; set; } = new();
+  }
+
+  public sealed class RateLimitOptions
+  {
+    public int WindowSeconds { get; set; } = 60;
+    public int MaxTasksPerWindow { get; set; } = 100;
   }
 
   public sealed class CrossDomainRule

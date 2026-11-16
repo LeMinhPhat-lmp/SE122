@@ -38,6 +38,7 @@ public sealed class DiscoveryIntegrationFixture : IAsyncLifetime
       builder.UseSetting("Aers:Redis:ConnectionString", redis.GetConnectionString());
       builder.UseSetting("Aers:Auth:RegistrationKeys:0", RegistrationKey);
       builder.UseSetting("Aers:Policy:DomainPolicy:Mode", "DenyByDefault");
+      builder.UseSetting("Aers:Policy:RateLimit:MaxTasksPerWindow", "10");
     });
     using var scope = Factory.Services.CreateScope();
     await scope.ServiceProvider.GetRequiredService<AersDbContext>().Database.EnsureCreatedAsync();

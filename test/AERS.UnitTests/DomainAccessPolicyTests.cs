@@ -66,6 +66,26 @@ public sealed class DomainAccessPolicyTests
   }
 
   [Fact]
+  public void PolicyOptions_RejectNonPositiveRecursionAndRateLimitValues()
+  {
+    var options = new AersPolicyOptions
+    {
+      MaxRecursionDepth = 0,
+      RateLimit = new() { WindowSeconds = 60, MaxTasksPerWindow = 100 }
+    };
+
+    Assert.False(AersPolicyOptionsValidator.IsValid(options));
+
+    options.MaxRecursionDepth = 5;
+    options.RateLimit.WindowSeconds = 0;
+    Assert.False(AersPolicyOptionsValidator.IsValid(options));
+
+    options.RateLimit.WindowSeconds = 60;
+    options.RateLimit.MaxTasksPerWindow = 0;
+    Assert.False(AersPolicyOptionsValidator.IsValid(options));
+  }
+
+  [Fact]
   public void Policy_IsRegisteredAsSingleton()
   {
     var services = new ServiceCollection().AddApplicationServices();
