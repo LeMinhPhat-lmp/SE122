@@ -58,3 +58,4 @@ CodeCoverage/
 TestResult.xml
 nunit-*.xml
 tmp/
+.aers-agents/

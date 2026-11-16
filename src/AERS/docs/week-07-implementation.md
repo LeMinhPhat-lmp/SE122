@@ -60,3 +60,22 @@ allowlist-only `DenyByDefault` policy. Same-domain calls are allowed,
 configured ordered pairs such as `hr → jobhunt` are allowed after
 normalization, and reverse or unknown pairs are denied. No Agent Card field or
 new configuration was added.
+
+## B-03 asynchronous AgentClient
+
+`AersAgentConnection` provides asynchronous `SubmitAsync`, `TaskHandle`,
+working notifications, first-result-wins completion, `WaitAsync`, polling
+fallback through `ObserveAsync`, and `GetTaskAsync`. SignalR handlers are
+registered once by `SignalRHubTransport`; automatic reconnect uses bounded
+backoff and pending handles remain usable after reconnect. Invocation handlers
+are dispatched outside the receive callback so nested submissions do not block
+the SignalR receive loop. Duplicate terminal results are ignored and retained
+entries are pruned after the configured retention period.
+
+`FileCredentialStore` is **PROVISIONAL (ADR-W9-03)** because the ADR file was
+not present in the repository. It stores `{agentId, apiKey}` atomically in a
+per-agent JSON file with user-only permissions where supported.
+`AersClient.RegisterOrResumeAsync` reuses a stored credential and registers
+again only after a missing or unauthorized credential; failed registration
+never overwrites the existing file. `.aers-agents/` is intentionally local
+runtime state and must not be committed.
