@@ -297,6 +297,9 @@ public sealed class AersAgentConnection : IAsyncDisposable
         }
       }
 
+      if (result.SuppressReply)
+        return;
+
       var payload = JsonSerializer.SerializeToElement(new
       {
         taskId = invocation.TaskId,

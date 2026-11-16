@@ -77,7 +77,7 @@ public sealed record TaskOutcome(
   JsonElement? Output,
   AersError? Error);
 
-public sealed record InvocationResult(JsonElement? Output, AersError? Error);
+public sealed record InvocationResult(JsonElement? Output, AersError? Error, bool SuppressReply = false);
 
 public sealed record InvocationContext(AersAgentConnection Connection);
 

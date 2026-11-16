@@ -30,4 +30,20 @@ public sealed class DummyAgentTests
     Assert.False(invalid.IsValid);
     Assert.NotEmpty(invalid.Errors);
   }
+
+  [Fact]
+  public void CommandLine_ParsesScenarioAndRejectsUnknownOptions()
+  {
+    var scenario = CommandLine.Parse(["scenario", "chain-abc"]);
+
+    Assert.Equal("scenario", scenario.Command);
+    Assert.Equal("chain-abc", scenario.Get("name"));
+    Assert.Throws<ArgumentException>(() => CommandLine.Parse(["serve", "--unknown"]));
+  }
+
+  [Fact]
+  public void CommandLine_RejectsInvalidInputJson()
+  {
+    Assert.Throws<ArgumentException>(() => CommandLine.Parse(["call", "--capability", "echo", "--input", "{bad"]));
+  }
 }

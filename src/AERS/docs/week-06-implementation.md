@@ -136,6 +136,17 @@ The client uses a small injectable `IHubTransport` abstraction for unit tests; p
 `net8.0` to preserve the existing `AERS.DummyAgent` dependency. The only new package is
 `Microsoft.AspNetCore.SignalR.Client` 8.0.34.
 
+## 8.2. Dummy Agent (B-03)
+
+`AERS.DummyAgent.Core` contains the console-independent deterministic catalog (`echo`, `analyze_cv`, `slow_echo`,
+`always_fail`, `never_reply`, and `forward`) and the `DummyAgent` lifecycle wrapper. Registration happens before the hub
+connection and heartbeat; `Connect = false` leaves a registered but unavailable target. Invocation records contain only task
+metadata, never input/output bodies. `never_reply` uses the client-side suppress-reply marker so callers exercise their own timeout.
+
+The `AERS.DummyAgent` console supports `serve`, `call`, `scenario`, and `inspect`; API keys are masked or read from an environment
+variable. The walkthrough is in `docs/week-06-demo.md`. The catalog's schemas use `additionalProperties: false`, and the core
+library has no console or server-project dependency.
+
 ## 9. Decisions A20-A40 (summary)
 
 A20 policy rejection never creates a Task (OD-3 closed) | A21 hub path, `X-Api-Key` (OP-1 closed) | A22 `Send`/`Receive` | A23 message types |
@@ -194,8 +205,10 @@ both `DependencyInjection` files in Application/Infrastructure/API, `Program.cs`
   Draft 2020-12 `prefixItems`, and the documented non-asserted `format` behavior.
 - B-02 includes fake-transport coverage for result buffering, rejected acknowledgements, failed outcomes, timeouts, nested calls,
   invocation failures, and `GetTaskAsync` authentication.
+- B-03 adds the `AERS.DummyAgent.Core` project, deterministic behaviors, lifecycle wrapper, console commands, demo guide, and
+  catalog unit tests. `never_reply` required the additive `InvocationResult.SuppressReply` marker in the client contract.
 - The B-02 context requested `net10.0`, but the existing AgentClient/DummyAgent pair is `net8.0`; it was preserved to avoid breaking
   the dependent console project.
 - The solution/`Migrations` files were not part of the snapshot; add `AERS.UnitTests` and `AERS.HubProbe` to your solution (`dotnet sln add`).
-- Validation completed with `mise exec -- dotnet test test/AERS.UnitTests/AERS.UnitTests.csproj`: 85 tests passed and 5
+- Validation completed with `mise exec -- dotnet test test/AERS.UnitTests/AERS.UnitTests.csproj`: 93 tests passed and 5
   environment-dependent integration tests were skipped. Existing nullable warnings in `Result<T>` and task persistence remain outside B-01.

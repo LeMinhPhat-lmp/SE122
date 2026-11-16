@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AERS.AgentClient\AERS.AgentClient.csproj" />
+    <ProjectReference Include="..\AERS.DummyAgent.Core\AERS.DummyAgent.Core.csproj" />
     <PackageReference Include="JsonSchema.Net" Version="7.3.4" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
