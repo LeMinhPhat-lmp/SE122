@@ -79,3 +79,18 @@ per-agent JSON file with user-only permissions where supported.
 again only after a missing or unauthorized credential; failed registration
 never overwrites the existing file. `.aers-agents/` is intentionally local
 runtime state and must not be committed.
+
+## B-04 Dummy Agent scenarios
+
+`AERS.DummyAgent.Core` is a server-independent library containing deterministic
+`slow`, `silent`, `drop-after-receive`, and `chain` behaviors in addition to
+the Week 6 behaviors. Slow work is awaited by the client invocation task and
+does not block the SignalR receive callback; silent returns
+`InvocationResult.SuppressReply`; drop/reconnect uses the client connection
+stop/start hooks. `ScenarioRunner` validates supported scenario names and
+provides a dry-run result; full persistence, timeout, Redis, and audit
+assertions belong to the B-05 integration pass.
+
+ADR-W7-03, ADR-W8-01, ADR-W8-02, and ADR-W8-03 were not present as Accepted
+ADRs in the repository. Their suggested defaults are therefore marked
+**PROVISIONAL** and documented in [week-07-demo.md](week-07-demo.md).

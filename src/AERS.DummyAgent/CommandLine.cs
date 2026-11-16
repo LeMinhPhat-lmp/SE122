@@ -3,6 +3,7 @@ namespace AERS.DummyAgent;
 public sealed class CommandLine
 {
   private readonly Dictionary<string, string?> options = new(StringComparer.OrdinalIgnoreCase);
+  private readonly List<string> positional = [];
 
   private CommandLine(string command)
   {
@@ -10,6 +11,7 @@ public sealed class CommandLine
   }
 
   public string Command { get; }
+  public IReadOnlyList<string> Positional => positional;
 
   public static CommandLine Parse(string[] args)
   {
@@ -21,13 +23,23 @@ public sealed class CommandLine
     {
       var argument = args[index];
       if (!argument.StartsWith("--", StringComparison.Ordinal))
+      {
+        if (result.Command == "scenario" && result.positional.Count == 0)
+        {
+          result.positional.Add(argument);
+          continue;
+        }
         throw new ArgumentException($"Unexpected argument '{argument}'.");
+      }
 
       var name = argument[2..];
       if (name.Length == 0)
         throw new ArgumentException("Option names cannot be empty.");
 
-      if (name.Equals("online-only", StringComparison.OrdinalIgnoreCase))
+      if (name.Equals("online-only", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("expect-timeout", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("disconnect-after-ack", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("answer-after-reconnect", StringComparison.OrdinalIgnoreCase))
       {
         result.options[name] = "true";
         continue;

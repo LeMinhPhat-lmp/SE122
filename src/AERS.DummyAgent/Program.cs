@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AERS.AgentClient;
 using AERS.DummyAgent;
+using AERS.DummyAgent.Core.Scenarios;
 using Microsoft.Extensions.Configuration;
 
 var configuration = new ConfigurationBuilder()
@@ -12,6 +13,8 @@ var configuration = new ConfigurationBuilder()
 try
 {
   var command = CommandLine.Parse(args);
+  if (command.Command == "scenario")
+    return RunScenario(command);
   var baseUrl = new Uri(configuration["Aers:BaseUrl"]
     ?? throw new InvalidOperationException("Aers:BaseUrl is required."));
   var registrationKey = configuration["Aers:RegistrationKey"];
@@ -153,6 +156,15 @@ static async Task RunSeedAsync(AersClient client, CommandLine command)
   }
 
   Console.WriteLine($"registered {count} seed agents.");
+}
+
+static int RunScenario(CommandLine command)
+{
+  if (command.Positional.Count != 1)
+    throw new ArgumentException("Usage: scenario <name>.");
+  var result = new ScenarioRunner().RunDry(command.Positional[0]);
+  Console.WriteLine(result.Message);
+  return result.Passed ? 0 : 1;
 }
 
 static AgentCardSubmission CreateCard(

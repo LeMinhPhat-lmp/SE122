@@ -72,7 +72,11 @@ public sealed record TaskInvocation(
   JsonElement Input,
   JsonElement? PolicyContext);
 
-public sealed record InvocationResult(string Status, JsonElement? Output, TaskError? Error);
+public sealed record InvocationResult(
+  string Status,
+  JsonElement? Output,
+  TaskError? Error,
+  bool SuppressReply = false);
 
 public sealed class AersAgentConnectionOptions
 {

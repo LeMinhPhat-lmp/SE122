@@ -55,6 +55,12 @@ public sealed class AersAgentConnection : IAsyncDisposable
     await transport.StopAsync(cancellationToken);
   }
 
+  public Task ReconnectAsync(CancellationToken cancellationToken = default)
+  {
+    ThrowIfDisposed();
+    return ReconnectCoreAsync(cancellationToken);
+  }
+
   public async Task<TaskHandle> SubmitAsync(
     Guid targetAgentId,
     string capability,
@@ -196,6 +202,8 @@ public sealed class AersAgentConnection : IAsyncDisposable
     try
     {
       var result = await handler(invocation);
+      if (result.SuppressReply)
+        return;
       var envelope = JsonSerializer.SerializeToElement(new
       {
         messageType = "task.result",
@@ -208,6 +216,13 @@ public sealed class AersAgentConnection : IAsyncDisposable
     {
       logger.LogWarning(ex, "Invocation handler failed.");
     }
+  }
+
+  private async Task ReconnectCoreAsync(CancellationToken cancellationToken)
+  {
+    if (transport.IsConnected)
+      return;
+    await transport.StartAsync(cancellationToken);
   }
 
   private async Task SendResultWithRetryAsync(JsonElement envelope)

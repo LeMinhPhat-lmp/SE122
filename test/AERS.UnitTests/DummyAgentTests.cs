@@ -30,4 +30,13 @@ public sealed class DummyAgentTests
     Assert.False(invalid.IsValid);
     Assert.NotEmpty(invalid.Errors);
   }
+
+  [Fact]
+  public void CommandLine_ParsesScenarioNameAndBooleanFlags()
+  {
+    var command = CommandLine.Parse(["scenario", "caller-offline", "--disconnect-after-ack"]);
+
+    Assert.Equal("caller-offline", command.Positional.Single());
+    Assert.True(command.Has("disconnect-after-ack"));
+  }
 }

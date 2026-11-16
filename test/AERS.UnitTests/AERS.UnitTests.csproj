@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\AERS.AgentClient\AERS.AgentClient.csproj" />
     <ProjectReference Include="..\..\src\AERS\API\API.csproj" />
     <ProjectReference Include="..\..\src\AERS.DummyAgent\AERS.DummyAgent.csproj" />
+    <ProjectReference Include="..\..\src\AERS.DummyAgent.Core\AERS.DummyAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\AERS\Application\Application.csproj" />
     <ProjectReference Include="..\..\src\AERS\Domain\Domain.csproj" />
   </ItemGroup>
