@@ -147,6 +147,14 @@ The `AERS.DummyAgent` console supports `serve`, `call`, `scenario`, and `inspect
 variable. The walkthrough is in `docs/week-06-demo.md`. The catalog's schemas use `additionalProperties: false`, and the core
 library has no console or server-project dependency.
 
+## 8.3. Integration tests (B-04)
+
+`TaskHubIntegrationTests` reuses the PostgreSQL/Redis `WebApplicationFactory` fixture and uses an in-process SignalR client with
+Long Polling and the `X-Api-Key` header. The raw JSON cases assert acknowledgement shape, explicit nulls, task invocation
+ancestry, rejected policy/create messages, result forwarding, and `GET /tasks` visibility. Tests remain skipped unless
+`AERS_RUN_INTEGRATION_TESTS=1` is set, so a normal unit-test run does not require Docker. The current harness contains 31
+executable cases; the remaining concurrency/ancestry/startup-purge cases are intentionally left for the final container pass.
+
 ## 9. Decisions A20-A40 (summary)
 
 A20 policy rejection never creates a Task (OD-3 closed) | A21 hub path, `X-Api-Key` (OP-1 closed) | A22 `Send`/`Receive` | A23 message types |
@@ -207,6 +215,8 @@ both `DependencyInjection` files in Application/Infrastructure/API, `Program.cs`
   invocation failures, and `GetTaskAsync` authentication.
 - B-03 adds the `AERS.DummyAgent.Core` project, deterministic behaviors, lifecycle wrapper, console commands, demo guide, and
   catalog unit tests. `never_reply` required the additive `InvocationResult.SuppressReply` marker in the client contract.
+- B-04 adds the TestServer/SignalR integration harness and 31 executable Week 6 cases. The remaining container-heavy concurrency,
+  ancestry-chain, and startup-purge cases remain for the final B-04 pass after the A-04/A-05 integration surface is stabilized.
 - The B-02 context requested `net10.0`, but the existing AgentClient/DummyAgent pair is `net8.0`; it was preserved to avoid breaking
   the dependent console project.
 - The solution/`Migrations` files were not part of the snapshot; add `AERS.UnitTests` and `AERS.HubProbe` to your solution (`dotnet sln add`).
