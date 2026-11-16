@@ -13,6 +13,7 @@ namespace Application.Interfaces.Policies;
 public interface ITaskPolicyEvaluator
 {
   Result Evaluate(TaskPolicyRequest request);
+  Result EvaluateRecursion(Guid targetAgentId, int depth, IReadOnlyList<Guid> ancestorChain);
 }
 
 public sealed record TaskPolicyRequest(Agent Caller, Agent Target, string Capability, JsonElement Input);

@@ -35,3 +35,28 @@ mise exec dotnet -- dotnet test test/AERS.UnitTests/AERS.UnitTests.csproj --no-r
 The Redis concurrency/TTL test remains an integration concern for the Week 7
 integration task; the local unit suite validates options and existing policy
 behavior without requiring a running Redis container.
+
+## B-02 recursion policy
+
+`TaskPolicyEvaluator.EvaluateRecursion` is synchronous and pure. It checks
+depth before cycle membership:
+
+| Task | Caller → target | `ancestorChain` | Result |
+|---|---|---|---|
+| T1 | A → B | `[A]` | allowed |
+| T2 | B → C | `[A, B]` | allowed |
+| T3 | C → A | `[A, B, C]` | `CYCLE_DETECTED` |
+| T3 | C → B | `[A, B, C]` | `CYCLE_DETECTED` |
+| root | A → A | `[A]` | `CYCLE_DETECTED` |
+| branch | C → D | `[A, B, C]` | allowed |
+
+With `MaxRecursionDepth = 5`, depths 0 through 5 are allowed and depth 6 is
+rejected with `DEPTH_EXCEEDED`. The evaluator does not access repositories,
+Redis, a registry, a limiter, or a clock. A-06 is responsible for inserting
+this stage into `TaskService.CreateAsync`.
+
+Cross-domain access remains **PROVISIONAL (ADR-W8-05)** and uses the existing
+allowlist-only `DenyByDefault` policy. Same-domain calls are allowed,
+configured ordered pairs such as `hr → jobhunt` are allowed after
+normalization, and reverse or unknown pairs are denied. No Agent Card field or
+new configuration was added.

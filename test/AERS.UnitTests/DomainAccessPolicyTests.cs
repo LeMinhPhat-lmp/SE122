@@ -29,6 +29,15 @@ public sealed class DomainAccessPolicyTests
   }
 
   [Fact]
+  public void UnknownCrossDomainPair_IsDenied()
+  {
+    var policy = CreatePolicy(Rule("hr", "jobhunt"));
+
+    Assert.False(policy.CanAccess("hr", "finance"));
+    Assert.False(policy.CanAccess("finance", "jobhunt"));
+  }
+
+  [Fact]
   public void SeveralRules_AreAllApplied()
   {
     var policy = CreatePolicy(Rule("hr", "jobhunt"), Rule("finance", "catalog"));
