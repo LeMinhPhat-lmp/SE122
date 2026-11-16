@@ -107,3 +107,13 @@ ADR-W7-03 disconnect grace worker, or the real SignalR integration helper.
 The four required ADRs were still `Proposed`; this pass uses their suggested
 defaults provisionally, as authorized by the owner. The skipped tests should
 be enabled once the corresponding A-02/A-03/A-04 prerequisites are delivered.
+
+## B-06 security integration test matrix
+
+`test/AERS.UnitTests/SecurityIntegrationTests.cs` preserves IT-W8-01 through
+IT-W8-30. The matrix uses the requested provisional defaults for the missing
+ADR-W8-01 through ADR-W8-05 decisions, but every case is currently an explicit
+skip because the A-05/A-06 production integration points and the Week 8
+recording hub harness are not present. No security behavior is claimed by
+these skipped cases; they are activation points for the next implementation
+pass.
