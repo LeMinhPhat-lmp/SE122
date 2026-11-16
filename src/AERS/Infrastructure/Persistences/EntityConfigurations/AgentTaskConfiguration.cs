@@ -18,8 +18,8 @@ public sealed class AgentTaskConfiguration : IEntityTypeConfiguration<AgentTask>
   // Plain static methods: expression trees used by value converters cannot contain optional arguments.
   private static string SerializeChain(List<Guid> chain) => JsonSerializer.Serialize(chain, JsonOptions);
   private static List<Guid> DeserializeChain(string json) => JsonSerializer.Deserialize<List<Guid>>(json, JsonOptions) ?? new List<Guid>();
-  private static string SerializeError(TaskError error) => JsonSerializer.Serialize(error, JsonOptions);
-  private static TaskError DeserializeError(string json) => JsonSerializer.Deserialize<TaskError>(json, JsonOptions)!;
+  private static string SerializeError(TaskError? error) => JsonSerializer.Serialize(error, JsonOptions);
+  private static TaskError? DeserializeError(string json) => JsonSerializer.Deserialize<TaskError>(json, JsonOptions);
 
   public void Configure(EntityTypeBuilder<AgentTask> builder)
   {
@@ -53,7 +53,7 @@ public sealed class AgentTaskConfiguration : IEntityTypeConfiguration<AgentTask>
 
     builder.Property(task => task.Error)
       .HasColumnType("jsonb")
-      .HasConversion(new ValueConverter<TaskError, string>(error => SerializeError(error), json => DeserializeError(json)));
+      .HasConversion(new ValueConverter<TaskError?, string>(error => SerializeError(error), json => DeserializeError(json)));
 
     builder.HasOne<Agent>().WithMany().HasForeignKey(task => task.CallerAgentId).OnDelete(DeleteBehavior.Restrict);
     builder.HasOne<Agent>().WithMany().HasForeignKey(task => task.TargetAgentId).OnDelete(DeleteBehavior.Restrict);
