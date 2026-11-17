@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/src/AERS/">
     <Project Path="src/AERS.AgentClient/AERS.AgentClient.csproj" />
+    <Project Path="src/AERS.DummyAgent.Core/AERS.DummyAgent.Core.csproj" />
     <Project Path="src/AERS.DummyAgent/AERS.DummyAgent.csproj" />
     <Project Path="src/AERS/API/API.csproj" />
     <Project Path="src/AERS/Application/Application.csproj" />

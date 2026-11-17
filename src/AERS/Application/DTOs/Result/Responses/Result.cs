@@ -43,7 +43,7 @@ public sealed class Result<T> : Result
 
   private Result() { }
 
-  public static new Result<T> Success(T? data = default) => new() { ResultStatus = ResultStatus.Success, Data = data };
+  public static Result<T> Success(T? data = default) => new() { ResultStatus = ResultStatus.Success, Data = data };
   public static new Result<T> Failure(ResultStatus status, string error) => new() { ResultStatus = status, Errors = [error] };
   public static new Result<T> Failure(ResultStatus status, IList<string> errors) => new() { ResultStatus = status, Errors = errors };
   public static new Result<T> Failure(ResultStatus status, string code, string message, IReadOnlyList<ErrorDetail>? details = null) =>

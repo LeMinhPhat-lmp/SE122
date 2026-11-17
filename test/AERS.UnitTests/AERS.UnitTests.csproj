@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.34" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageReference Include="Testcontainers.Redis" Version="4.16.0" />
@@ -20,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AERS.AgentClient\AERS.AgentClient.csproj" />
+    <ProjectReference Include="..\..\src\AERS.DummyAgent.Core\AERS.DummyAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\AERS\API\API.csproj" />
     <ProjectReference Include="..\..\src\AERS.DummyAgent\AERS.DummyAgent.csproj" />
     <ProjectReference Include="..\..\src\AERS\Application\Application.csproj" />
