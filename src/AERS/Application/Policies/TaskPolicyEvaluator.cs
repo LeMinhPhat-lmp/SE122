@@ -10,7 +10,7 @@ namespace Application.Policies;
 
 /// <summary>
 /// Domain scope, capability exists, input valid. Pure: it reads only the loaded entities and the request, never a
-/// repository or Redis. Rate limiting is done by IRateLimiter; depth and cycle are in EvaluateRecursion.
+/// repository, Redis, or a clock. Rate limiting is kept separate because it is stateful; recursion checks are pure.
 /// </summary>
 public sealed class TaskPolicyEvaluator(
   IDomainAccessPolicy domainAccessPolicy,
@@ -37,14 +37,24 @@ public sealed class TaskPolicyEvaluator(
     return Result.Success();
   }
 
-  // Depth first, then cycle (A53 to A55). The boundary is depth > MaxRecursionDepth, so depth 0..Max is allowed.
   public Result EvaluateRecursion(Guid targetAgentId, int depth, IReadOnlyList<Guid> ancestorChain)
   {
-    if (depth > policyOptions.Value.MaxRecursionDepth)
-      return Result.Failure(ResultStatus.Conflict, ErrorCodes.DepthExceeded, "The maximum recursion depth was exceeded.");
+    var maxDepth = policyOptions.Value.MaxRecursionDepth;
+    if (depth > maxDepth)
+    {
+      return Result.Failure(
+        ResultStatus.Conflict,
+        ErrorCodes.DepthExceeded,
+        "The maximum recursion depth was exceeded.");
+    }
 
     if (ancestorChain.Contains(targetAgentId))
-      return Result.Failure(ResultStatus.Conflict, ErrorCodes.CycleDetected, "The target agent is already part of the call chain.");
+    {
+      return Result.Failure(
+        ResultStatus.Conflict,
+        ErrorCodes.CycleDetected,
+        "A recursion cycle was detected.");
+    }
 
     return Result.Success();
   }

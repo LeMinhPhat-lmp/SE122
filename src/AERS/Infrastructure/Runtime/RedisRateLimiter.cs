@@ -1,3 +1,4 @@
+using System.Globalization;
 using Application.Interfaces.Policies;
 using Application.Models;
 using Application.Options;
@@ -8,33 +9,51 @@ using StackExchange.Redis;
 namespace Infrastructure.Runtime;
 
 /// <summary>
-/// Fixed window counter per caller agent (A56, D-17): key {prefix}ratelimit:{callerAgentId}:{windowStartUnixSeconds}.
-/// INCR and EXPIRE run in one Lua script, so the key never exists without a TTL. A denied request still increments the counter
-/// (a denied burst does not reopen the window early); Remaining is clamped at zero. This class never decides what happens when
-/// Redis is down: the base class throws StateStoreUnavailableException and TaskService applies ADR-W8-01 (fail-closed).
+/// PROVISIONAL (ADR-W8-01): a Redis failure is surfaced to the caller, which applies
+/// the accepted fail-closed task-create behavior. REST endpoints are not rate limited.
 /// </summary>
 public sealed class RedisRateLimiter(
   IConnectionMultiplexer redis,
-  IOptions<RedisOptions> options,
+  IOptions<RedisOptions> redisOptions,
   IOptions<AersPolicyOptions> policyOptions,
-  TimeProvider timeProvider) : RedisStoreBase(redis, options), IRateLimiter
+  TimeProvider timeProvider)
+  : RedisStoreBase(redis, redisOptions), IRateLimiter
 {
-  private const string IncrementScript = "local c = redis.call('INCR', KEYS[1]) if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end return c";
+  private const string AcquireScript = """
+    local count = redis.call('INCR', KEYS[1])
+    local ttl = redis.call('TTL', KEYS[1])
+    if count == 1 or ttl < 0 then
+      redis.call('EXPIRE', KEYS[1], ARGV[1])
+    end
+    return count
+    """;
 
-  public async Task<RateLimitDecision> TryAcquireAsync(Guid callerAgentId, CancellationToken cancellationToken = default)
+  public Task<RateLimitDecision> TryAcquireAsync(
+    Guid callerAgentId,
+    CancellationToken cancellationToken = default)
   {
-    var limits = policyOptions.Value.RateLimit;
-    var windowStart = timeProvider.GetUtcNow().ToUnixTimeSeconds() / limits.WindowSeconds * limits.WindowSeconds;
-    var key = $"{KeyPrefix}ratelimit:{callerAgentId}:{windowStart}";
+    var options = policyOptions.Value.RateLimit;
+    var now = timeProvider.GetUtcNow();
+    var unixSeconds = now.ToUnixTimeSeconds();
+    var windowStartUnixSeconds = unixSeconds - (unixSeconds % options.WindowSeconds);
+    var resetAt = DateTimeOffset.FromUnixTimeSeconds(windowStartUnixSeconds + options.WindowSeconds);
+    var key = $"{KeyPrefix}ratelimit:{callerAgentId:D}:{windowStartUnixSeconds.ToString(CultureInfo.InvariantCulture)}";
 
-    var count = (long)await ExecuteAsync(
-      database => database.ScriptEvaluateAsync(IncrementScript, new RedisKey[] { key }, new RedisValue[] { limits.WindowSeconds + 1 }),
-      cancellationToken);
+    return ExecuteAsync(async database =>
+    {
+      var result = await database.ScriptEvaluateAsync(
+        AcquireScript,
+        new RedisKey[] { key },
+        new RedisValue[] { options.WindowSeconds + 1 });
+      var count = checked((int)(long)result);
+      var remaining = Math.Max(options.MaxTasksPerWindow - count, 0);
 
-    return new RateLimitDecision(
-      count <= limits.MaxTasksPerWindow,
-      limits.MaxTasksPerWindow,
-      (int)Math.Max(0, limits.MaxTasksPerWindow - count),
-      DateTimeOffset.FromUnixTimeSeconds(windowStart + limits.WindowSeconds));
+      // Denied calls intentionally increment the fixed-window counter; they must not reopen the window early.
+      return new RateLimitDecision(
+        count <= options.MaxTasksPerWindow,
+        options.MaxTasksPerWindow,
+        remaining,
+        resetAt);
+    }, cancellationToken);
   }
 }

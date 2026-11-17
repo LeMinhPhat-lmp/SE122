@@ -57,5 +57,5 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
-
 tmp/
+.aers-agents/

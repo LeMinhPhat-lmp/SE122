@@ -32,18 +32,11 @@ public sealed class DummyAgentTests
   }
 
   [Fact]
-  public void CommandLine_ParsesScenarioAndRejectsUnknownOptions()
+  public void CommandLine_ParsesScenarioNameAndBooleanFlags()
   {
-    var scenario = CommandLine.Parse(["scenario", "chain-abc"]);
+    var command = CommandLine.Parse(["scenario", "caller-offline", "--disconnect-after-ack"]);
 
-    Assert.Equal("scenario", scenario.Command);
-    Assert.Equal("chain-abc", scenario.Get("name"));
-    Assert.Throws<ArgumentException>(() => CommandLine.Parse(["serve", "--unknown"]));
-  }
-
-  [Fact]
-  public void CommandLine_RejectsInvalidInputJson()
-  {
-    Assert.Throws<ArgumentException>(() => CommandLine.Parse(["call", "--capability", "echo", "--input", "{bad"]));
+    Assert.Equal("caller-offline", command.Positional.Single());
+    Assert.True(command.Has("disconnect-after-ack"));
   }
 }

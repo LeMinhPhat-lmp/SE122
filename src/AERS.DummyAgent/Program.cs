@@ -14,7 +14,10 @@ var configuration = new ConfigurationBuilder()
 try
 {
   var command = CommandLine.Parse(args);
-  var baseUrl = new Uri(configuration["Aers:BaseUrl"] ?? "http://localhost:5161");
+  if (command.Command == "scenario")
+    return RunScenario(command);
+  var baseUrl = new Uri(configuration["Aers:BaseUrl"]
+    ?? throw new InvalidOperationException("Aers:BaseUrl is required."));
   var registrationKey = configuration["Aers:RegistrationKey"];
   return command.Command switch
   {
@@ -137,20 +140,21 @@ static async Task<int> ScenarioAsync(Uri baseUrl, string? registrationKey, Comma
   return result.Passed ? 0 : 1;
 }
 
-static async Task<int> InspectAsync(Uri baseUrl, CommandLine command)
+static int RunScenario(CommandLine command)
 {
-  var taskId = Guid.Parse(command.Get("task-id")
-    ?? throw new ArgumentException("'--task-id' is required for inspect."));
-  var environmentName = command.Get("api-key-env")
-    ?? throw new ArgumentException("'--api-key-env' is required for inspect.");
-  var apiKey = Environment.GetEnvironmentVariable(environmentName)
-    ?? throw new InvalidOperationException($"Environment variable '{environmentName}' is not set.");
-  using var http = new HttpClient();
-  var client = new AersClient(http, new AersClientOptions { BaseUrl = baseUrl, ApiKey = apiKey });
-  var task = await client.GetTaskAsync(taskId);
-  Console.WriteLine($"task: {task.TaskId} status={task.Status} capability={task.Capability}");
-  Console.WriteLine($"output: {task.Output?.GetRawText() ?? "null"}");
-  return 0;
+  if (command.Positional.Count != 1)
+    throw new ArgumentException("Usage: scenario <name>.");
+  var result = new ScenarioRunner().RunDry(command.Positional[0]);
+  Console.WriteLine(result.Message);
+  return result.Passed ? 0 : 1;
 }
+
+static AgentCardSubmission CreateCard(
+  string name, string domain, Capability capability) =>
+  new(name, domain, "AERS Week 5 dummy agent.", null, [capability]);
+
+static Capability EmptyCapability(string name) =>
+  new(name, "Seed or consumer capability.", JsonDocument.Parse("{}").RootElement.Clone(),
+    JsonDocument.Parse("{}").RootElement.Clone());
 
 static JsonElement Element(string json) => JsonDocument.Parse(json).RootElement.Clone();

@@ -3,148 +3,81 @@ using AERS.AgentClient;
 
 namespace AERS.DummyAgent.Core.Behaviors;
 
-public sealed record DummyBehaviorContext(
-  TaskInvocation Invocation,
-  string DisplayName,
-  Guid AgentId,
-  AersClient Client,
-  AersAgentConnection Connection,
-  TimeSpan ChildCallTimeout);
-
-public delegate Task<InvocationResult> DummyBehavior(
-  DummyBehaviorContext context,
-  CancellationToken cancellationToken);
-
-public sealed record CapabilityDefinition(
+public sealed record DummyBehaviorOptions(
   string Name,
-  string Description,
-  JsonElement InputSchema,
-  JsonElement OutputSchema,
-  DummyBehavior Behavior);
+  int DelayMilliseconds = 0,
+  int ReconnectAfterMilliseconds = 0,
+  bool AnswerAfterReconnect = false,
+  Guid? NextAgentId = null,
+  string NextCapability = "echo");
 
 public static class DummyCatalog
 {
-  private static readonly IReadOnlyDictionary<string, CapabilityDefinition> Definitions =
-    new Dictionary<string, CapabilityDefinition>(StringComparer.Ordinal)
+  public static Func<TaskInvocation, Task<InvocationResult>> Create(
+    DummyBehaviorOptions options,
+    Func<CancellationToken, Task>? disconnect = null,
+    Func<CancellationToken, Task>? reconnect = null,
+    Func<TaskInvocation, CancellationToken, Task<InvocationResult>>? childCall = null)
+  {
+    ArgumentNullException.ThrowIfNull(options);
+    return options.Name switch
     {
-      ["echo"] = Create("echo", "Echoes a message.", """{"type":"object","additionalProperties":false,"required":["message"],"properties":{"message":{"type":"string"}}}""",
-        """{"type":"object","additionalProperties":false,"required":["message","handledBy"],"properties":{"message":{"type":"string"},"handledBy":{"type":"string"}}}""", EchoAsync),
-      ["analyze_cv"] = Create("analyze_cv", "Analyzes CV text.", """{"type":"object","additionalProperties":false,"required":["cvText"],"properties":{"cvText":{"type":"string","minLength":1}}}""",
-        """{"type":"object","additionalProperties":false,"required":["score","wordCount"],"properties":{"score":{"type":"number"},"wordCount":{"type":"integer"}}}""", AnalyzeCvAsync),
-      ["slow_echo"] = Create("slow_echo", "Echoes a message after a delay.", """{"type":"object","additionalProperties":false,"required":["message","delayMs"],"properties":{"message":{"type":"string"},"delayMs":{"type":"integer","minimum":0,"maximum":60000}}}""",
-        """{"type":"object","additionalProperties":false,"required":["message"],"properties":{"message":{"type":"string"}}}""", SlowEchoAsync),
-      ["always_fail"] = Create("always_fail", "Always returns a deterministic failure.", """{"type":"object","additionalProperties":false,"properties":{"reason":{"type":"string"}}}""",
-        """{"type":"object","additionalProperties":false}""", AlwaysFailAsync),
-      ["never_reply"] = Create("never_reply", "Never returns a result.", """{"type":"object","additionalProperties":false}""",
-        """{"type":"object","additionalProperties":false}""", NeverReplyAsync),
-      ["forward"] = Create("forward", "Forwards a task to another agent.", """{"type":"object","additionalProperties":false,"required":["targetCapability","input"],"properties":{"targetCapability":{"type":"string"},"input":{"type":"object"},"domain":{"type":"string"}}}""",
-        """{"type":"object","additionalProperties":false,"required":["forwardedTo","result"],"properties":{"forwardedTo":{"type":"string"},"result":{"type":"object"}}}""", ForwardAsync)
+      "echo" => invocation => Task.FromResult(Completed(invocation.Input)),
+      "slow" => invocation => SlowAsync(invocation, options.DelayMilliseconds),
+      "silent" => _ => Task.FromResult(new InvocationResult("completed", null, null, SuppressReply: true)),
+      "drop-after-receive" => DropAsync,
+      "always_fail" => _ => Task.FromResult(new InvocationResult(
+        "failed", null, new TaskError("DUMMY_FAILURE", "The dummy behavior failed."))),
+      "analyze_cv" => invocation => Task.FromResult(Completed(JsonSerializer.SerializeToElement(new { score = 42 }))),
+      "chain" when options.NextAgentId is not null && childCall is not null =>
+        invocation => ChainAsync(invocation, options, childCall),
+      _ => throw new ArgumentException($"Unknown or incomplete dummy behavior '{options.Name}'.", nameof(options))
     };
 
-  public static IReadOnlyList<CapabilityDefinition> All { get; } = Definitions.Values.ToArray();
-
-  public static CapabilityDefinition Get(string name) =>
-    Definitions.TryGetValue(name, out var definition)
-      ? definition
-      : throw new KeyNotFoundException($"Unknown dummy capability '{name}'.");
-
-  private static CapabilityDefinition Create(
-    string name,
-    string description,
-    string inputSchema,
-    string outputSchema,
-    DummyBehavior behavior) =>
-    new(name, description, Element(inputSchema), Element(outputSchema), behavior);
-
-  private static Task<InvocationResult> EchoAsync(DummyBehaviorContext context, CancellationToken _)
-  {
-    var message = context.Invocation.Input.GetProperty("message").GetString()!;
-    return Task.FromResult(new InvocationResult(Element($$"""{"message":{{JsonSerializer.Serialize(message)}},"handledBy":{{JsonSerializer.Serialize(context.DisplayName)}}}"""), null));
-  }
-
-  private static Task<InvocationResult> AnalyzeCvAsync(DummyBehaviorContext context, CancellationToken _)
-  {
-    var text = context.Invocation.Input.GetProperty("cvText").GetString()!;
-    var wordCount = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-    var score = (text.Length * 7) % 101;
-    return Task.FromResult(new InvocationResult(Element($$"""{"score":{{score}},"wordCount":{{wordCount}}}"""), null));
-  }
-
-  private static async Task<InvocationResult> SlowEchoAsync(DummyBehaviorContext context, CancellationToken cancellationToken)
-  {
-    var delay = context.Invocation.Input.GetProperty("delayMs").GetInt32();
-    await Task.Delay(delay, cancellationToken);
-    var message = context.Invocation.Input.GetProperty("message").GetString()!;
-    return new InvocationResult(Element($$"""{"message":{{JsonSerializer.Serialize(message)}}}"""), null);
-  }
-
-  private static Task<InvocationResult> AlwaysFailAsync(DummyBehaviorContext context, CancellationToken _)
-  {
-    var reason = context.Invocation.Input.TryGetProperty("reason", out var value)
-      ? value.GetString()
-      : null;
-    return Task.FromResult(new InvocationResult(null,
-      new AersError("DUMMY_FAILURE", string.IsNullOrWhiteSpace(reason) ? "always_fail invoked" : reason)));
-  }
-
-  private static Task<InvocationResult> NeverReplyAsync(DummyBehaviorContext _, CancellationToken __) =>
-    Task.FromResult(new InvocationResult(null, null, SuppressReply: true));
-
-  private static async Task<InvocationResult> ForwardAsync(
-    DummyBehaviorContext context,
-    CancellationToken cancellationToken)
-  {
-    var targetCapability = context.Invocation.Input.GetProperty("targetCapability").GetString()!;
-    var input = context.Invocation.Input.GetProperty("input").Clone();
-    var domain = context.Invocation.Input.TryGetProperty("domain", out var domainElement)
-      ? domainElement.GetString()
-      : context.Invocation.PolicyContext.TargetDomain;
-    var query = new AgentQuery(domain, targetCapability, true, null);
-    AgentCard? target = null;
-    await foreach (var candidate in context.Client.ListAllAgentsAsync(query, cancellationToken))
+    async Task<InvocationResult> DropAsync(TaskInvocation invocation)
     {
-      if (candidate.AgentId != context.AgentId &&
-          candidate.Capabilities.Any(capability => capability.Name == targetCapability))
+      if (disconnect is not null)
+        await disconnect(CancellationToken.None);
+      if (options.AnswerAfterReconnect && reconnect is not null)
       {
-        target = candidate;
-        break;
+        if (options.ReconnectAfterMilliseconds > 0)
+          await Task.Delay(options.ReconnectAfterMilliseconds);
+        await reconnect(CancellationToken.None);
+        return Completed(invocation.Input);
       }
+      return new InvocationResult("completed", null, null, SuppressReply: true);
     }
 
-    if (target is null)
-      return new InvocationResult(null, new AersError("NO_FORWARD_TARGET", "No forwarding target was found."));
-
-    TaskOutcome child;
-    try
+    static async Task<InvocationResult> SlowAsync(TaskInvocation invocation, int delayMilliseconds)
     {
-      child = await context.Connection.CallAsync(
-        new CreateTaskCall(target.AgentId, targetCapability, input, context.Invocation.TaskId),
-        context.ChildCallTimeout,
-        cancellationToken);
-    }
-    catch (TaskResultTimeoutException)
-    {
-      return new InvocationResult(null, new AersError("CHILD_TIMEOUT", "The forwarded task timed out."));
+      if (delayMilliseconds < 0)
+        throw new ArgumentOutOfRangeException(nameof(delayMilliseconds));
+      await Task.Delay(delayMilliseconds);
+      return Completed(invocation.Input);
     }
 
-    if (child.Status != TaskStatusValue.Completed)
-    {
-      var details = JsonSerializer.SerializeToElement(new
-      {
-        childCode = child.Error?.Code,
-        childMessage = child.Error?.Message
-      });
-      return new InvocationResult(null,
-        new AersError("CHILD_TASK_FAILED", child.Error?.Message ?? "The forwarded task failed.", details));
-    }
-
-    var output = JsonSerializer.SerializeToElement(new
-    {
-      forwardedTo = target.AgentId,
-      result = child.Output ?? Element("{}")
-    });
-    return new InvocationResult(output, null);
+    static InvocationResult Completed(JsonElement output) =>
+      new("completed", output.Clone(), null);
   }
 
-  private static JsonElement Element(string json) => JsonDocument.Parse(json).RootElement.Clone();
+  private static async Task<InvocationResult> ChainAsync(
+    TaskInvocation invocation,
+    DummyBehaviorOptions options,
+    Func<TaskInvocation, CancellationToken, Task<InvocationResult>> childCall)
+  {
+    var child = await childCall(new TaskInvocation(
+      Guid.NewGuid(),
+      invocation.RootTaskId,
+      invocation.TaskId,
+      invocation.Depth + 1,
+      options.NextCapability,
+      invocation.Input,
+      invocation.PolicyContext), CancellationToken.None);
+    if (child.Status == "failed")
+      return new InvocationResult("failed", null, child.Error);
+    return new InvocationResult(
+      "completed",
+      JsonSerializer.SerializeToElement(new { via = options.Name, child = child.Output }),
+      null);
+  }
 }

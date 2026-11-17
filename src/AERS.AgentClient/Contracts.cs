@@ -6,7 +6,7 @@ namespace AERS.AgentClient;
 public sealed class AersClientOptions
 {
   public required Uri BaseUrl { get; init; }
-  public string? RegistrationKey { get; init; }
+  public string? RegistrationKey { get; set; }
   public string? ApiKey { get; set; }
 }
 
@@ -43,54 +43,26 @@ public sealed record AgentQuery(string? Domain, string? Capability, bool OnlineO
 
 public sealed record RegistrationResult(Guid AgentId, string ApiKey);
 
-public enum TaskStatusValue
-{
-  Submitted,
-  Working,
-  Completed,
-  Failed
-}
+public sealed record StoredCredential(Guid AgentId, string ApiKey);
 
-public sealed record AersError(
-  string Code,
-  string Message,
-  JsonElement? Details = null,
-  bool? Retryable = null);
+public sealed record TaskOutcome(string Status, JsonElement? Output, TaskError? Error);
 
-public sealed record TaskEnvelope(string MessageType, JsonElement Payload);
+public sealed record TaskError(string Code, string Message, JsonElement? Details = null, bool Retryable = false);
 
-public sealed record CreateTaskCall(
-  Guid TargetAgentId,
-  string Capability,
-  JsonElement Input,
-  Guid? ParentTaskId = null);
-
-public sealed record TaskAck(
-  bool Accepted,
-  Guid? TaskId,
-  TaskStatusValue? Status,
-  AersError? Error);
-
-public sealed record TaskOutcome(
+public sealed record TaskQueryResult(
   Guid TaskId,
-  TaskStatusValue Status,
-  JsonElement? Output,
-  AersError? Error);
-
-public sealed record InvocationResult(JsonElement? Output, AersError? Error, bool SuppressReply = false);
-
-public sealed record InvocationContext(AersAgentConnection Connection);
-
-public sealed record PolicyContext(
   Guid CallerAgentId,
   Guid TargetAgentId,
   string Capability,
-  string CallerDomain,
-  string TargetDomain,
-  Guid RootTaskId,
+  string Status,
+  JsonElement? Output,
   Guid? ParentTaskId,
+  Guid RootTaskId,
   int Depth,
-  string? OwnerRef);
+  DateTimeOffset CreatedAt,
+  DateTimeOffset? StartedAt,
+  DateTimeOffset? CompletedAt,
+  TaskError? Error);
 
 public sealed record TaskInvocation(
   Guid TaskId,
@@ -99,19 +71,20 @@ public sealed record TaskInvocation(
   int Depth,
   string Capability,
   JsonElement Input,
-  PolicyContext PolicyContext);
+  JsonElement? PolicyContext);
 
-public sealed record TaskQueryResult(
-  Guid TaskId,
-  Guid CallerAgentId,
-  Guid TargetAgentId,
-  string Capability,
-  TaskStatusValue Status,
+public sealed record InvocationResult(
+  string Status,
   JsonElement? Output,
-  Guid? ParentTaskId,
-  Guid RootTaskId,
-  int Depth,
-  DateTimeOffset CreatedAt,
-  DateTimeOffset? StartedAt,
-  DateTimeOffset? CompletedAt,
-  AersError? Error);
+  TaskError? Error,
+  bool SuppressReply = false);
+
+public sealed class AersAgentConnectionOptions
+{
+  public required Uri HubUrl { get; init; }
+  public string? ApiKey { get; set; }
+  public TimeSpan ResultRetention { get; init; } = TimeSpan.FromMinutes(10);
+  public TimeSpan ObserveInterval { get; init; } = TimeSpan.FromSeconds(2);
+  public int ResultSendRetryCount { get; init; } = 3;
+  public TimeSpan ResultSendRetryDelay { get; init; } = TimeSpan.FromSeconds(5);
+}

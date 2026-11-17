@@ -29,6 +29,15 @@ public sealed class DomainAccessPolicyTests
   }
 
   [Fact]
+  public void UnknownCrossDomainPair_IsDenied()
+  {
+    var policy = CreatePolicy(Rule("hr", "jobhunt"));
+
+    Assert.False(policy.CanAccess("hr", "finance"));
+    Assert.False(policy.CanAccess("finance", "jobhunt"));
+  }
+
+  [Fact]
   public void SeveralRules_AreAllApplied()
   {
     var policy = CreatePolicy(Rule("hr", "jobhunt"), Rule("finance", "catalog"));
@@ -63,6 +72,26 @@ public sealed class DomainAccessPolicyTests
     Assert.False(IsValid("DenyByDefault", Rule("hr!", "jobhunt")));
     Assert.False(IsValid("DenyByDefault", Rule("hr", "jobhunt"), Rule(" HR ", " JOBHUNT ")));
     Assert.True(IsValid("DenyByDefault", Rule(" HR ", " JobHunt ")));
+  }
+
+  [Fact]
+  public void PolicyOptions_RejectNonPositiveRecursionAndRateLimitValues()
+  {
+    var options = new AersPolicyOptions
+    {
+      MaxRecursionDepth = 0,
+      RateLimit = new() { WindowSeconds = 60, MaxTasksPerWindow = 100 }
+    };
+
+    Assert.False(AersPolicyOptionsValidator.IsValid(options));
+
+    options.MaxRecursionDepth = 5;
+    options.RateLimit.WindowSeconds = 0;
+    Assert.False(AersPolicyOptionsValidator.IsValid(options));
+
+    options.RateLimit.WindowSeconds = 60;
+    options.RateLimit.MaxTasksPerWindow = 0;
+    Assert.False(AersPolicyOptionsValidator.IsValid(options));
   }
 
   [Fact]

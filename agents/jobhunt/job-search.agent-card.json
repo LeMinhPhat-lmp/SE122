@@ -1,0 +1,35 @@
+{
+  "agentCard": {
+    "name": "Job Search Agent",
+    "domain": "jobhunt",
+    "description": "Searches fixture job data with no LLM.",
+    "ownerRef": null,
+    "capabilities": [
+      {
+        "name": "search_jobs",
+        "description": "Finds fixture jobs by keywords and optional location.",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "keywords": { "type": "array", "description": "One to ten search terms.", "minItems": 1, "maxItems": 10, "items": { "type": "string", "minLength": 1, "maxLength": 50 } },
+            "location": { "type": "string", "description": "Optional location filter.", "minLength": 1, "maxLength": 100 },
+            "maxResults": { "type": "integer", "description": "Maximum number of jobs to return.", "minimum": 1, "maximum": 20 }
+          },
+          "required": ["keywords"],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "jobs": { "type": "array", "description": "Matching fixture jobs.", "items": { "type": "object", "properties": { "jobId": { "type": "string", "description": "Stable fixture job identifier." }, "title": { "type": "string", "description": "Job title." }, "company": { "type": "string", "description": "Company name." }, "location": { "type": "string", "description": "Job location." }, "summary": { "type": "string", "description": "Job summary." } }, "required": ["jobId", "title", "company", "location", "summary"], "additionalProperties": false } },
+            "total": { "type": "integer", "description": "Total number of matching jobs.", "minimum": 0 }
+          },
+          "required": ["jobs", "total"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}

@@ -8,10 +8,12 @@ public sealed class CommandLine
     "api-key-env", "task-id", "no-connect", "expect-allowed", "page-size", "online-only", "count"
   };
   private readonly Dictionary<string, string?> options = new(StringComparer.OrdinalIgnoreCase);
+  private readonly List<string> positional = [];
 
   private CommandLine(string command) => Command = command;
 
   public string Command { get; }
+  public IReadOnlyList<string> Positional => positional;
 
   public static CommandLine Parse(string[] args)
   {
@@ -29,13 +31,23 @@ public sealed class CommandLine
         continue;
       }
       if (!argument.StartsWith("--", StringComparison.Ordinal))
+      {
+        if (result.Command == "scenario" && result.positional.Count == 0)
+        {
+          result.positional.Add(argument);
+          continue;
+        }
         throw new ArgumentException($"Unexpected argument '{argument}'.");
+      }
+
       var name = argument[2..];
-      if (!KnownOptions.Contains(name))
-        throw new ArgumentException($"Unknown option '--{name}'.");
-      if (name.Equals("no-connect", StringComparison.OrdinalIgnoreCase) ||
-          name.Equals("online-only", StringComparison.OrdinalIgnoreCase) ||
-          name.Equals("expect-allowed", StringComparison.OrdinalIgnoreCase))
+      if (name.Length == 0)
+        throw new ArgumentException("Option names cannot be empty.");
+
+      if (name.Equals("online-only", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("expect-timeout", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("disconnect-after-ack", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("answer-after-reconnect", StringComparison.OrdinalIgnoreCase))
       {
         result.options[name] = "true";
         continue;

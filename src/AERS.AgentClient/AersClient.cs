@@ -8,7 +8,7 @@ namespace AERS.AgentClient;
 
 public sealed class AersClient
 {
-  private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+  internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
   {
     DefaultIgnoreCondition = JsonIgnoreCondition.Never
   };
@@ -42,6 +42,46 @@ public sealed class AersClient
     var result = await SendAsync<RegistrationResult>(request, ct);
     options.ApiKey = result.ApiKey;
     return result;
+  }
+
+  public async Task<RegistrationResult> RegisterOrResumeAsync(
+    AgentCardSubmission card,
+    string registrationKey,
+    ICredentialStore credentialStore,
+    string? agentKey = null,
+    CancellationToken ct = default)
+  {
+    ArgumentNullException.ThrowIfNull(card);
+    ArgumentNullException.ThrowIfNull(credentialStore);
+    ArgumentException.ThrowIfNullOrWhiteSpace(registrationKey);
+    var key = agentKey ?? card.Name;
+    var stored = await credentialStore.LoadAsync(key, ct);
+    if (stored is not null)
+    {
+      options.ApiKey = stored.ApiKey;
+      try
+      {
+        await HeartbeatAsync(stored.AgentId, ct);
+        return new RegistrationResult(stored.AgentId, stored.ApiKey);
+      }
+      catch (AersApiException ex) when (ex.StatusCode == (int)HttpStatusCode.Unauthorized)
+      {
+        // The rejected credential is not deleted until a replacement has been saved successfully.
+      }
+    }
+
+    var previousRegistrationKey = options.RegistrationKey;
+    options.RegistrationKey = registrationKey;
+    try
+    {
+      var registration = await RegisterAsync(card, ct);
+      await credentialStore.SaveAsync(key, new StoredCredential(registration.AgentId, registration.ApiKey), ct);
+      return registration;
+    }
+    finally
+    {
+      options.RegistrationKey = previousRegistrationKey;
+    }
   }
 
   public Task HeartbeatAsync(Guid agentId, CancellationToken ct = default) =>

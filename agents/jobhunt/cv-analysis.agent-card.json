@@ -1,0 +1,35 @@
+{
+  "agentCard": {
+    "name": "CV Analysis Agent",
+    "domain": "jobhunt",
+    "description": "Analyzes CV text against a job description with no LLM and fixture data.",
+    "ownerRef": null,
+    "capabilities": [
+      {
+        "name": "analyze_cv",
+        "description": "Scores a CV against an optional job description.",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "cvText": { "type": "string", "description": "CV text to analyze.", "minLength": 1, "maxLength": 20000 },
+            "jobDescription": { "type": "string", "description": "Optional job description.", "maxLength": 5000 }
+          },
+          "required": ["cvText"],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "score": { "type": "number", "description": "Match score from 0 to 100.", "minimum": 0, "maximum": 100 },
+            "matchedSkills": { "type": "array", "description": "Skills found in both inputs.", "items": { "type": "string" } },
+            "missingSkills": { "type": "array", "description": "Skills missing from the CV.", "items": { "type": "string" } }
+          },
+          "required": ["score", "matchedSkills", "missingSkills"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}
