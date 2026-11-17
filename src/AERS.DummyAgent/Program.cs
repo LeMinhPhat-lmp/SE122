@@ -1,9 +1,10 @@
 using System.Text.Json;
+using AERS.DummyAgent.Core.Behaviors;
+using AERS.DummyAgent.Core.Scenarios;
 using AERS.AgentClient;
 using AERS.DummyAgent;
-using AERS.DummyAgent.Core;
-using AERS.DummyAgent.Core.Scenarios;
 using Microsoft.Extensions.Configuration;
+using DummyAgentInstance = AERS.DummyAgent.Core.DummyAgent;
 
 var configuration = new ConfigurationBuilder()
   .SetBasePath(AppContext.BaseDirectory)
@@ -23,7 +24,6 @@ try
   {
     "serve" or "provider" => await ServeAsync(baseUrl, registrationKey, command),
     "call" or "consumer" => await CallAsync(baseUrl, registrationKey, command),
-    "scenario" => await ScenarioAsync(baseUrl, registrationKey, command),
     "inspect" => await InspectAsync(baseUrl, command),
     _ => throw new ArgumentException($"Unknown command '{command.Command}'.")
   };
@@ -37,7 +37,7 @@ catch (OperationCanceledException)
 {
   return 0;
 }
-catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or TimeoutException)
 {
   Console.Error.WriteLine(ex.Message);
   return 2;
@@ -45,23 +45,23 @@ catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
 
 static async Task<int> ServeAsync(Uri baseUrl, string? registrationKey, CommandLine command)
 {
-  var capabilities = (command.Get("capability") ?? "echo,analyze_cv")
+  var behaviorNames = (command.Get("capability") ?? "echo,analyze_cv")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-  var agent = new DummyAgent(new(
-    baseUrl,
-    registrationKey,
-    command.Get("name") ?? "Dummy Agent",
-    command.Get("domain") ?? "jobhunt",
-    capabilities)
-  {
-    Connect = !command.Has("no-connect")
-  });
-  agent.InvocationCompleted += (record, result) =>
-  {
-    Console.WriteLine($"invoke: task={record.TaskId} capability={record.Capability} depth={record.Depth} parent={record.ParentTaskId?.ToString() ?? "-"}");
-    Console.WriteLine($"result: task={record.TaskId} status={(result.Error is null ? "completed" : "failed")}");
-  };
+  var nextAgentId = command.Get("next-agent-id") is { } nextText ? Guid.Parse(nextText) : (Guid?)null;
+  var behaviors = behaviorNames.Select(name => new DummyBehaviorOptions(
+    name,
+    DelayMilliseconds: command.GetInt("delay-ms", 0),
+    ReconnectAfterMilliseconds: command.GetInt("reconnect-after-ms", 0),
+    AnswerAfterReconnect: command.Has("answer-after-reconnect"),
+    NextAgentId: nextAgentId,
+    NextCapability: command.Get("next-capability") ?? "echo")).ToList();
 
+  // Fail fast on unknown or incomplete behaviors instead of failing on the first invocation.
+  foreach (var behavior in behaviors)
+    DummyCatalog.Create(behavior, childCall: (_, _) => throw new InvalidOperationException());
+
+  using var http = new HttpClient { BaseAddress = baseUrl };
+  var client = new AersClient(http, new AersClientOptions { BaseUrl = baseUrl, RegistrationKey = registrationKey });
   using var cancellation = new CancellationTokenSource();
   ConsoleCancelEventHandler handler = (_, eventArgs) =>
   {
@@ -69,18 +69,45 @@ static async Task<int> ServeAsync(Uri baseUrl, string? registrationKey, CommandL
     cancellation.Cancel();
   };
   Console.CancelKeyPress += handler;
+
+  var card = new AgentCardSubmission(
+    command.Get("name") ?? "Dummy Agent",
+    command.Get("domain") ?? "jobhunt",
+    "AERS dummy agent.",
+    null,
+    behaviorNames.Select(CreateCapability).ToList());
+  var registration = await client.RegisterAsync(card, cancellation.Token);
+  Console.WriteLine($"agent registered: {card.Name} (domain {card.Domain}) id={registration.AgentId}");
+
+  await using var connection = new AersAgentConnection(http, new AersAgentConnectionOptions
+  {
+    HubUrl = new Uri(baseUrl, "hubs/agent"),
+    ApiKey = registration.ApiKey
+  });
   try
   {
-    await agent.StartAsync(cancellation.Token);
-    Console.WriteLine($"agent registered: {agent.DisplayName} (domain {command.Get("domain") ?? "jobhunt"}) id={agent.AgentId}, key={agent.MaskedApiKey}");
-    if (!command.Has("no-connect"))
-      Console.WriteLine("hub connected");
-    await Task.Delay(Timeout.InfiniteTimeSpan, cancellation.Token);
+    await connection.StartAsync(cancellation.Token);
+    Console.WriteLine("hub connected");
+    Func<TaskInvocation, CancellationToken, Task<InvocationResult>>? childCall = null;
+    if (nextAgentId is not null)
+      childCall = async (child, token) =>
+      {
+        var handle = await connection.SubmitAsync(
+          nextAgentId.Value, child.Capability, child.Input, child.ParentTaskId, token);
+        var outcome = await handle.WaitAsync(TimeSpan.FromSeconds(command.GetDouble("timeout", 30)), token);
+        return new InvocationResult(outcome.Status, outcome.Output, outcome.Error);
+      };
+    foreach (var behavior in behaviors)
+      new DummyAgentInstance(connection, behavior, registration.AgentId).Start(
+        disconnect: connection.StopAsync,
+        reconnect: connection.ReconnectAsync,
+        childCall: childCall);
+    await new AgentHeartbeatRunner(client).RunAsync(registration.AgentId, cancellation.Token);
   }
   finally
   {
     Console.CancelKeyPress -= handler;
-    await agent.StopAsync();
+    await client.DeregisterAsync(registration.AgentId);
     Console.WriteLine("agent deregistered.");
   }
   return 0;
@@ -91,16 +118,25 @@ static async Task<int> CallAsync(Uri baseUrl, string? registrationKey, CommandLi
   var capability = command.Get("capability")
     ?? throw new ArgumentException("'--capability' is required for call.");
   var domain = command.Get("domain") ?? "jobhunt";
-  var consumer = new DummyAgent(new(baseUrl, registrationKey, "Temporary Consumer", domain, []));
+
+  using var http = new HttpClient { BaseAddress = baseUrl };
+  var client = new AersClient(http, new AersClientOptions { BaseUrl = baseUrl, RegistrationKey = registrationKey });
+  var registration = await client.RegisterAsync(
+    new AgentCardSubmission("Temporary Consumer", domain, "AERS dummy consumer.", null, [CreateCapability("consume")]));
+  await using var connection = new AersAgentConnection(http, new AersAgentConnectionOptions
+  {
+    HubUrl = new Uri(baseUrl, "hubs/agent"),
+    ApiKey = registration.ApiKey
+  });
   try
   {
-    await consumer.StartAsync();
-    var query = new AgentQuery(command.Get("query-domain") ?? domain, capability, command.Has("online-only"), null);
+    await connection.StartAsync();
+    int? limit = command.Has("page-size") ? command.GetInt("page-size", 50) : null;
+    var query = new AgentQuery(command.Get("query-domain") ?? domain, capability, command.Has("online-only"), limit);
     AgentCard? target = null;
-    await foreach (var candidate in consumer.Client.ListAllAgentsAsync(query))
+    await foreach (var candidate in client.ListAllAgentsAsync(query))
     {
-      if (candidate.AgentId != consumer.AgentId &&
-          candidate.Capabilities.Any(item => item.Name == capability))
+      if (candidate.AgentId != registration.AgentId && candidate.Capabilities.Any(item => item.Name == capability))
       {
         target = candidate;
         break;
@@ -109,52 +145,48 @@ static async Task<int> CallAsync(Uri baseUrl, string? registrationKey, CommandLi
     if (target is null)
       throw new InvalidOperationException($"No agent offering '{capability}' was found.");
     Console.WriteLine($"call: discovered Agent {target.AgentId} offering {capability} in domain {query.Domain}");
-    var input = command.Get("input") is { } raw ? Element(raw) : Element("{}");
-    var timeout = TimeSpan.FromSeconds(command.GetDouble("timeout", 10));
-    var parent = command.Get("parent-task-id") is { } parentText
-      ? Guid.Parse(parentText)
-      : (Guid?)null;
-    var ack = await consumer.Connection.SubmitAsync(new CreateTaskCall(target.AgentId, capability, input, parent));
-    Console.WriteLine($"call: task={ack.TaskId} submitted (status {ack.Status})");
-    var outcome = await consumer.Connection.WaitForResultAsync(ack.TaskId!.Value, timeout);
-    Console.WriteLine($"call: task={outcome.TaskId} status={outcome.Status} output={outcome.Output?.GetRawText() ?? "null"}");
+
+    using var inputDocument = JsonDocument.Parse(command.Get("input") ?? "{}");
+    var parent = command.Get("parent-task-id") is { } parentText ? Guid.Parse(parentText) : (Guid?)null;
+    var handle = await connection.SubmitAsync(target.AgentId, capability, inputDocument.RootElement.Clone(), parent);
+    Console.WriteLine($"call: task={handle.TaskId} submitted (status {handle.Status})");
+    var outcome = await handle.WaitAsync(TimeSpan.FromSeconds(command.GetDouble("timeout", 10)));
+    Console.WriteLine($"call: task={handle.TaskId} status={outcome.Status} output={outcome.Output?.GetRawText() ?? "null"}");
     if (outcome.Error is not null)
-      Console.WriteLine($"call: task={outcome.TaskId} status=failed code={outcome.Error.Code} message={outcome.Error.Message}");
-    return outcome.Status == TaskStatusValue.Completed ? 0 : 1;
+      Console.WriteLine($"call: task={handle.TaskId} code={outcome.Error.Code} message={outcome.Error.Message}");
+    return outcome.Status == "completed" ? 0 : 1;
   }
   finally
   {
-    await consumer.StopAsync();
+    await client.DeregisterAsync(registration.AgentId);
   }
 }
 
-static async Task<int> ScenarioAsync(Uri baseUrl, string? registrationKey, CommandLine command)
+static async Task<int> InspectAsync(Uri baseUrl, CommandLine command)
 {
-  var name = command.Get("name") ?? throw new ArgumentException("'scenario' requires '--name'.");
-  var result = await new ScenarioRunner().RunAsync(name, new(baseUrl, registrationKey));
-  Console.WriteLine($"{(result.Passed ? "PASS" : "FAIL")} {result.Name}");
-  foreach (var fact in result.Facts)
-    Console.WriteLine($"fact: {fact}");
-  foreach (var failure in result.Failures)
-    Console.WriteLine($"failure: {failure}");
-  return result.Passed ? 0 : 1;
+  if (!Guid.TryParse(command.Get("task-id"), out var taskId))
+    throw new ArgumentException("'--task-id' must be a valid task id.");
+  var apiKey = Environment.GetEnvironmentVariable(command.Get("api-key-env") ?? "AERS_API_KEY")
+    ?? throw new InvalidOperationException("The API key environment variable is not set.");
+  using var http = new HttpClient();
+  var client = new AersClient(http, new AersClientOptions { BaseUrl = baseUrl, ApiKey = apiKey });
+  var task = await client.GetTaskAsync(taskId);
+  Console.WriteLine(JsonSerializer.Serialize(task, new JsonSerializerOptions { WriteIndented = true }));
+  return 0;
 }
 
 static int RunScenario(CommandLine command)
 {
-  if (command.Positional.Count != 1)
-    throw new ArgumentException("Usage: scenario <name>.");
-  var result = new ScenarioRunner().RunDry(command.Positional[0]);
+  var name = command.Positional.Count == 1
+    ? command.Positional[0]
+    : command.Get("name") ?? throw new ArgumentException("Usage: scenario <name>.");
+  var result = new ScenarioRunner().RunDry(name);
   Console.WriteLine(result.Message);
   return result.Passed ? 0 : 1;
 }
 
-static AgentCardSubmission CreateCard(
-  string name, string domain, Capability capability) =>
-  new(name, domain, "AERS Week 5 dummy agent.", null, [capability]);
-
-static Capability EmptyCapability(string name) =>
-  new(name, "Seed or consumer capability.", JsonDocument.Parse("{}").RootElement.Clone(),
-    JsonDocument.Parse("{}").RootElement.Clone());
-
-static JsonElement Element(string json) => JsonDocument.Parse(json).RootElement.Clone();
+static Capability CreateCapability(string name)
+{
+  using var schema = JsonDocument.Parse("""{"type":"object"}""");
+  return new Capability(name, $"Dummy capability '{name}'.", schema.RootElement.Clone(), schema.RootElement.Clone());
+}

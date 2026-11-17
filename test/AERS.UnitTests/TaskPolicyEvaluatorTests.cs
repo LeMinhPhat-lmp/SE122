@@ -3,10 +3,12 @@ using Application.Constants;
 using Application.DTOs.Result.Enums;
 using Application.Interfaces.Policies;
 using Application.Interfaces.Validation;
+using Application.Options;
 using Application.Policies;
 using Application.DTOs.Result.Responses;
 using Domain.Entities;
 using Infrastructure.Validation;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace AERS.UnitTests;
@@ -63,7 +65,8 @@ public sealed class TaskPolicyEvaluatorTests
   {
     var target = CreateAgent("hr", "analyze");
     target.Capabilities.Single().DeletedAt = DateTimeOffset.UtcNow;
-    var evaluator = new TaskPolicyEvaluator(new FakeDomainAccessPolicy((_, _) => true), new StubInputSchemaValidator());
+    var evaluator = new TaskPolicyEvaluator(
+      new FakeDomainAccessPolicy((_, _) => true), new StubInputSchemaValidator(), Options.Create(new AersPolicyOptions()));
 
     var result = evaluator.Evaluate(new TaskPolicyRequest(CreateAgent("hr"), target, "analyze", EmptyObject()));
 
@@ -180,7 +183,7 @@ public sealed class TaskPolicyEvaluatorTests
   private static TaskPolicyEvaluator CreateEvaluator(
     Func<string, string, bool> domainRule,
     StubInputSchemaValidator validator) =>
-    new(new FakeDomainAccessPolicy(domainRule), validator);
+    new(new FakeDomainAccessPolicy(domainRule), validator, Options.Create(new AersPolicyOptions()));
 
   private static TaskPolicyRequest Request(string callerDomain, string targetDomain, string capability, string? targetCapability = null) =>
     new(CreateAgent(callerDomain), CreateAgent(targetDomain, targetCapability ?? (capability == "missing" ? "other" : capability)), capability, EmptyObject());

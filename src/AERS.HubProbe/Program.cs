@@ -34,6 +34,7 @@ var connection = new HubConnectionBuilder()
   .Build();
 
 var behavior = options.GetValueOrDefault("behavior", "echo");
+var autoAck = options.GetValueOrDefault("auto-ack", "false") == "true";
 
 // Handlers run on a separate task: the client processes messages one at a time, so a handler that waits for another
 // message (the "forward" behavior waits for a child result) would otherwise block the receive loop forever.
@@ -50,8 +51,6 @@ catch (Exception ex)
 }
 
 Console.WriteLine($"CONNECTED as the agent that owns this key (connection id {connection.ConnectionId}).");
-
-var autoAck = options.GetValueOrDefault("auto-ack", "false") == "true";
 
 if (command == "watch")
 {

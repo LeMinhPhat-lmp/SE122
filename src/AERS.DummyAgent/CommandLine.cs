@@ -25,11 +25,6 @@ public sealed class CommandLine
     for (var index = 1; index < args.Length; index++)
     {
       var argument = args[index];
-      if (command == "scenario" && index == 1 && !argument.StartsWith("--", StringComparison.Ordinal))
-      {
-        result.options["name"] = argument;
-        continue;
-      }
       if (!argument.StartsWith("--", StringComparison.Ordinal))
       {
         if (result.Command == "scenario" && result.positional.Count == 0)
