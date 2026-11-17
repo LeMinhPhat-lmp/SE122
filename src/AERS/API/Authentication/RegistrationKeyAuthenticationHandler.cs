@@ -14,17 +14,30 @@ public sealed class RegistrationKeyAuthenticationHandler(
   IOptionsMonitor<AuthenticationSchemeOptions> options,
   ILoggerFactory logger,
   UrlEncoder encoder,
-  IRegistrationKeyValidator registrationKeyValidator) : AgentAuthenticationHandlerBase(options, logger, encoder)
+  IRegistrationKeyValidator registrationKeyValidator,
+  AuthFailureLogLimiter logLimiter) : AgentAuthenticationHandlerBase(options, logger, encoder, logLimiter)
 {
   public const string HeaderName = "X-Registration-Key";
 
   protected override Task<AuthenticateResult> HandleAuthenticateAsync()
   {
     if (!Request.Headers.TryGetValue(HeaderName, out var header))
+    {
+      LogFailure(Missing);
       return Task.FromResult(AuthenticateResult.NoResult());
+    }
+
+    if (string.IsNullOrWhiteSpace(header.ToString()))
+    {
+      LogFailure(Malformed);
+      return Task.FromResult(AuthenticateResult.Fail("Invalid credential."));
+    }
 
     if (!registrationKeyValidator.IsValid(header.ToString()))
+    {
+      LogFailure(UnknownOrRevoked);
       return Task.FromResult(AuthenticateResult.Fail("Invalid credential."));
+    }
 
     var identity = new ClaimsIdentity(
       new[] { new Claim(AgentClaimTypes.AuthScheme, "API_KEY") },

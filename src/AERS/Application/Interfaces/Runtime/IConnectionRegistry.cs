@@ -7,8 +7,11 @@ public interface IConnectionRegistry
 {
   Task BindAsync(Guid agentId, string connectionId, string instanceId, CancellationToken cancellationToken = default);
 
-  /// <summary>Atomic compare-and-delete on connectionId: an old connection closing never removes a newer mapping.</summary>
-  Task UnbindAsync(Guid agentId, string connectionId, CancellationToken cancellationToken = default);
+  /// <summary>
+  /// Atomic compare-and-delete on connectionId: an old connection closing never removes a newer mapping.
+  /// Returns true only when this call removed the mapping (the connection was still the current one).
+  /// </summary>
+  Task<bool> UnbindAsync(Guid agentId, string connectionId, CancellationToken cancellationToken = default);
 
   Task<ConnectionInfo?> ResolveAsync(Guid agentId, CancellationToken cancellationToken = default);
 

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using API.Authentication;
 using API.Exceptions;
 using API.Realtime;
+using API.Workers;
 using Application.Constants;
 using Application.DTOs.Result.Enums;
 using Application.DTOs.Result.Responses;
@@ -88,6 +89,9 @@ public static class DependencyInjection
       .Configure<IOptions<RelayOptions>>((hubOptions, relayOptions) => hubOptions.MaximumReceiveMessageSize = relayOptions.Value.MaxMessageBytes);
 
     services.AddSingleton<IMessageRelay, SignalRMessageRelay>();
+    services.AddSingleton<LiveConnectionTracker>();
+    services.AddHostedService<TaskTimeoutWorker>();
+    services.AddHostedService<ConnectionTerminationSubscriber>();
 
     return services;
   }
@@ -100,6 +104,7 @@ public static class DependencyInjection
       .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(AuthSchemes.ApiKey, null)
       .AddScheme<AuthenticationSchemeOptions, RegistrationKeyAuthenticationHandler>(AuthSchemes.RegistrationKey, null);
     services.AddAuthorization();
+    services.AddSingleton<AuthFailureLogLimiter>();
 
     return services;
   }

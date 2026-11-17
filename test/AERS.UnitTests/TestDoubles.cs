@@ -86,6 +86,17 @@ internal sealed class FakeDomainAccessPolicy(Func<string, string, bool> rule) : 
   }
 }
 
+internal sealed class NoopConnectionTerminator : IConnectionTerminator
+{
+  public List<Guid> Terminated { get; } = [];
+
+  public Task TerminateAsync(Guid agentId, CancellationToken cancellationToken = default)
+  {
+    Terminated.Add(agentId);
+    return Task.CompletedTask;
+  }
+}
+
 internal sealed class UnusedApiKeyService : IApiKeyService
 {
   public IssuedApiKey Generate() => throw new NotSupportedException();
@@ -125,6 +136,7 @@ internal static class TestData
       Options.Create(new AersPolicyOptions()),
       Options.Create(discovery ?? new DiscoveryOptions()),
       policy,
+      new NoopConnectionTerminator(),
       TimeProvider.System,
       NullLogger<AgentRegistryService>.Instance);
 }

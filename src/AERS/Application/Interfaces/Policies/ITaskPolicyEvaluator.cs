@@ -13,6 +13,13 @@ namespace Application.Interfaces.Policies;
 public interface ITaskPolicyEvaluator
 {
   Result Evaluate(TaskPolicyRequest request);
+
+  /// <summary>
+  /// Recursion protection (A54, A55). Pure, no I/O. DEPTH_EXCEEDED when depth is greater than MaxRecursionDepth, otherwise
+  /// CYCLE_DETECTED when targetAgentId is in ancestorChain (agent granularity). Depth is checked first. The failures carry no
+  /// structured details: TaskService attaches the A57 details because it knows the root task id.
+  /// </summary>
+  Result EvaluateRecursion(Guid targetAgentId, int depth, IReadOnlyList<Guid> ancestorChain);
 }
 
 public sealed record TaskPolicyRequest(Agent Caller, Agent Target, string Capability, JsonElement Input);

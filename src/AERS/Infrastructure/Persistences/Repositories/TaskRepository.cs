@@ -58,4 +58,49 @@ public sealed class TaskRepository(AersDbContext context) : ITaskRepository
 
     return changedRows == 1;
   }
+
+  // Served by the (status, deadline_at) index; projects two columns, so no entity is materialized or tracked.
+  public async Task<IReadOnlyList<ExpiredTaskRef>> ListExpiredAsync(DateTimeOffset now, int limit, CancellationToken cancellationToken = default) =>
+    await context.AgentTasks
+      .AsNoTracking()
+      .Where(task => (task.Status == AgentTaskStatus.Submitted || task.Status == AgentTaskStatus.Working) && task.DeadlineAt < now)
+      .OrderBy(task => task.DeadlineAt)
+      .ThenBy(task => task.Id)
+      .Select(task => new ExpiredTaskRef(task.Id, task.Status))
+      .Take(limit)
+      .ToListAsync(cancellationToken);
+
+  public async Task<IReadOnlyList<WorkingTaskRef>> ListWorkingByTargetAsync(Guid targetAgentId, int limit, CancellationToken cancellationToken = default) =>
+    await context.AgentTasks
+      .AsNoTracking()
+      .Where(task => task.TargetAgentId == targetAgentId && task.Status == AgentTaskStatus.Working)
+      .OrderBy(task => task.CreatedAt)
+      .ThenBy(task => task.Id)
+      .Select(task => new WorkingTaskRef(task.Id, task.CallerAgentId, task.DeadlineAt))
+      .Take(limit)
+      .ToListAsync(cancellationToken);
+
+  public async Task<IReadOnlyList<AgentTask>> ListUnacknowledgedTerminalAsync(Guid callerAgentId, int limit, CancellationToken cancellationToken = default) =>
+    await context.AgentTasks
+      .AsNoTracking()
+      .Where(task => task.CallerAgentId == callerAgentId
+        && (task.Status == AgentTaskStatus.Completed || task.Status == AgentTaskStatus.Failed)
+        && task.AcknowledgedAt == null)
+      .OrderBy(task => task.CompletedAt)
+      .ThenBy(task => task.Id)
+      .Take(limit)
+      .ToListAsync(cancellationToken);
+
+  // One statement, no transaction needed. The AcknowledgedAt == null predicate makes a repeated ack a no-op.
+  public async Task<bool> TryAcknowledgeAsync(Guid taskId, Guid callerAgentId, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+    await context.AgentTasks
+      .Where(task => task.Id == taskId && task.CallerAgentId == callerAgentId && task.AcknowledgedAt == null)
+      .ExecuteUpdateAsync(setters => setters.SetProperty(task => task.AcknowledgedAt, (DateTimeOffset?)now), cancellationToken) == 1;
+
+  public Task<int> CountWorkingAsTargetAsync(Guid agentId, CancellationToken cancellationToken = default) =>
+    context.AgentTasks
+      .AsNoTracking()
+      .Where(task => task.TargetAgentId == agentId && task.Status == AgentTaskStatus.Working)
+      .Take(1)
+      .CountAsync(cancellationToken);
 }

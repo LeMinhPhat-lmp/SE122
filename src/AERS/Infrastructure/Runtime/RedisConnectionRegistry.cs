@@ -31,10 +31,12 @@ public sealed class RedisConnectionRegistry(IConnectionMultiplexer redis, IOptio
       new("connectedAt", timeProvider.GetUtcNow().UtcDateTime.ToString("O", CultureInfo.InvariantCulture))
     }), cancellationToken);
 
-  public Task UnbindAsync(Guid agentId, string connectionId, CancellationToken cancellationToken = default) =>
-    ExecuteAsync(
-      database => database.ScriptEvaluateAsync(UnbindScript, new RedisKey[] { Key(agentId) }, new RedisValue[] { connectionId }),
-      cancellationToken);
+  public Task<bool> UnbindAsync(Guid agentId, string connectionId, CancellationToken cancellationToken = default) =>
+    ExecuteAsync<bool>(async database =>
+    {
+      var removed = await database.ScriptEvaluateAsync(UnbindScript, new RedisKey[] { Key(agentId) }, new RedisValue[] { connectionId });
+      return (long)removed == 1;
+    }, cancellationToken);
 
   public Task<ConnectionInfo?> ResolveAsync(Guid agentId, CancellationToken cancellationToken = default) =>
     ExecuteAsync<ConnectionInfo?>(async database =>

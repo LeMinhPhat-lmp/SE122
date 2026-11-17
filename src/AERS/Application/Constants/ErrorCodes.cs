@@ -14,4 +14,8 @@ public static class ErrorCodes
   public const string CapabilityNotFound = "CAPABILITY_NOT_FOUND";
   public const string TaskStateConflict = "TASK_STATE_CONFLICT";
   public const string TargetUnavailable = "TARGET_UNAVAILABLE";
+  public const string TaskTimeout = "TASK_TIMEOUT";
+  public const string RateLimited = "RATE_LIMITED";
+  public const string DepthExceeded = "DEPTH_EXCEEDED";
+  public const string CycleDetected = "CYCLE_DETECTED";
 }

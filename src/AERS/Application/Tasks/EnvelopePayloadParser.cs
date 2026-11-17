@@ -76,6 +76,18 @@ public static class EnvelopePayloadParser
       : Result<TaskStatusEvent>.Success(new TaskStatusEvent(taskId!, status!));
   }
 
+  public static Result<TaskAck> ParseAck(JsonElement payload)
+  {
+    var errors = new List<ErrorDetail>();
+    RejectUnknownProperties(payload, Root, ["taskId"], errors);
+
+    var taskId = ReadString(payload, Root, "taskId", required: true, errors);
+
+    return errors.Count > 0
+      ? Invalid<TaskAck>(errors)
+      : Result<TaskAck>.Success(new TaskAck(taskId!));
+  }
+
   // code and message are read as optional here; ITaskService rejects empty values for a failed result with exact paths.
   private static ErrorPayload ReadError(JsonElement error, List<ErrorDetail> errors)
   {

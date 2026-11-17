@@ -13,23 +13,33 @@ public sealed class ApiKeyAuthenticationHandler(
   ILoggerFactory logger,
   UrlEncoder encoder,
   IApiKeyService apiKeyService,
-  IUnitOfWork unitOfWork) : AgentAuthenticationHandlerBase(options, logger, encoder)
+  IUnitOfWork unitOfWork,
+  AuthFailureLogLimiter logLimiter) : AgentAuthenticationHandlerBase(options, logger, encoder, logLimiter)
 {
   public const string HeaderName = "X-Api-Key";
 
   protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
   {
     if (!Request.Headers.TryGetValue(HeaderName, out var header))
+    {
+      LogFailure(Missing);
       return AuthenticateResult.NoResult();
+    }
 
     var rawKey = header.ToString();
     if (string.IsNullOrWhiteSpace(rawKey))
+    {
+      LogFailure(Malformed);
       return AuthenticateResult.Fail("Invalid credential.");
+    }
 
     // Credential values (raw or hashed) must never be written to logs.
     var credential = await unitOfWork.AgentCredentialRepository.GetActiveByHashAsync(apiKeyService.Hash(rawKey), Context.RequestAborted);
     if (credential is null)
+    {
+      LogFailure(UnknownOrRevoked);
       return AuthenticateResult.Fail("Invalid credential.");
+    }
 
     var identity = new ClaimsIdentity(
       new[]

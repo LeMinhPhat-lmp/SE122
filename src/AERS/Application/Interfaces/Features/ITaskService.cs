@@ -22,4 +22,22 @@ public interface ITaskService
 
   /// <summary>GET /tasks/{taskId}: PostgreSQL only; 404 before 403; only the caller or the target may read (A33).</summary>
   Task<Result<TaskQueryResult>> GetAsync(Guid taskId, AuthenticatedAgentContext caller, CancellationToken cancellationToken = default);
+
+  /// <summary>
+  /// Handles task.ack from the caller (ADR-W7-02): sets acknowledged_at with one conditional UPDATE. Idempotent: a repeated ack is accepted.
+  /// TASK_NOT_FOUND, TASK_ACCESS_FORBIDDEN (sender is not the caller) and TASK_STATE_CONFLICT (task not terminal) are the only failures.
+  /// </summary>
+  Task<Result<TaskAckOutcome>> AcknowledgeAsync(TaskAck ack, AuthenticatedAgentContext sender, CancellationToken cancellationToken = default);
+
+  /// <summary>
+  /// Fails a submitted or working task whose deadline has passed with TASK_TIMEOUT (A46). Idempotent. Pushes nothing: the caller
+  /// of this method pushes ResultToPush after the commit.
+  /// </summary>
+  Task<Result<TaskExpiryOutcome>> ExpireAsync(Guid taskId, CancellationToken cancellationToken = default);
+
+  /// <summary>
+  /// Fails up to <paramref name="limit"/> working tasks of a target agent that did not reconnect within the grace period, with
+  /// TARGET_UNAVAILABLE (ADR-W7-03). Each task is a compare-and-set, so a result that arrived first wins. Pushes nothing.
+  /// </summary>
+  Task<Result<DisconnectFailureBatch>> FailTasksOfDisconnectedTargetAsync(Guid targetAgentId, int limit, CancellationToken cancellationToken = default);
 }

@@ -21,13 +21,15 @@ public static class ResultExtensions
     ResultStatus.NotFound => StatusCodes.Status404NotFound,
     ResultStatus.Conflict => StatusCodes.Status409Conflict,
     ResultStatus.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
+    ResultStatus.TooManyRequests => StatusCodes.Status429TooManyRequests,
     _ => StatusCodes.Status500InternalServerError
   };
 
   public static ErrorResponse ToErrorResponse(this Result result) => new(
     result.ErrorCode ?? ErrorCodes.InternalError,
     result.Errors.FirstOrDefault() ?? "The request failed.",
-    result.ErrorDetails.Count == 0 ? null : new ErrorResponseDetails(result.ErrorDetails));
+    result.ErrorDetails.Count == 0 ? null : new ErrorResponseDetails(result.ErrorDetails),
+    result.Retryable);
 
   /// <summary>For controller actions.</summary>
   public static ObjectResult ToErrorResult(this Result result) =>
