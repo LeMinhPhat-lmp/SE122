@@ -67,5 +67,10 @@ public sealed class AgentTaskConfiguration : IEntityTypeConfiguration<AgentTask>
     builder.HasIndex(task => task.TargetAgentId);
     builder.HasIndex(task => task.RootTaskId);
     builder.HasIndex(task => task.ParentTaskId);
+
+    // ADR-W7-02: redelivery on reconnect reads the terminal, unacknowledged tasks of one caller (status 2 completed, 3 failed).
+    builder.HasIndex(task => new { task.CallerAgentId, task.CompletedAt })
+      .HasDatabaseName("ix_tasks_caller_unacknowledged")
+      .HasFilter("status IN (2, 3) AND acknowledged_at IS NULL");
   }
 }

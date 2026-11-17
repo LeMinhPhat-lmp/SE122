@@ -13,6 +13,11 @@ public sealed class AersClient
     DefaultIgnoreCondition = JsonIgnoreCondition.Never
   };
 
+  static AersClient()
+  {
+    JsonOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+  }
+
   private readonly HttpClient http;
   private readonly AersClientOptions options;
 
@@ -121,6 +126,10 @@ public sealed class AersClient
   public Task<AgentCapabilities> GetCapabilitiesAsync(Guid agentId, CancellationToken ct = default) =>
     SendAsync<AgentCapabilities>(
       CreateAuthenticatedRequest(HttpMethod.Get, $"agents/{agentId:D}/capabilities"), ct);
+
+  public Task<TaskQueryResult> GetTaskAsync(Guid taskId, CancellationToken ct = default) =>
+    SendAsync<TaskQueryResult>(
+      CreateAuthenticatedRequest(HttpMethod.Get, $"tasks/{taskId:D}"), ct);
 
   internal async Task SendHeartbeatAsync(Guid agentId, CancellationToken ct) =>
     await HeartbeatAsync(agentId, ct);

@@ -16,6 +16,12 @@ public static partial class AersPolicyOptionsValidator
       || !string.Equals(options.DomainPolicy.Mode, "DenyByDefault", StringComparison.Ordinal))
       return false;
 
+    if (options.MaxRecursionDepth < 1
+      || options.RateLimit is null
+      || options.RateLimit.WindowSeconds < 1
+      || options.RateLimit.MaxTasksPerWindow < 1)
+      return false;
+
     var domains = new HashSet<string>(StringComparer.Ordinal);
     foreach (var rule in options.DomainPolicy.CrossDomainRules ?? [])
     {

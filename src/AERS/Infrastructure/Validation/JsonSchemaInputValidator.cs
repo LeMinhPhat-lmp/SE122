@@ -12,7 +12,7 @@ namespace Infrastructure.Validation;
 /// </summary>
 public sealed class JsonSchemaInputValidator : IInputSchemaValidator
 {
-  private static readonly EvaluationOptions ListOutput = new() { OutputFormat = OutputFormat.List };
+  private static readonly EvaluationOptions Evaluation = new() { OutputFormat = OutputFormat.Hierarchical };
 
   public IReadOnlyList<ErrorDetail> Validate(JsonElement schema, JsonElement instance)
   {
@@ -27,22 +27,27 @@ public sealed class JsonSchemaInputValidator : IInputSchemaValidator
       throw new InvalidOperationException("The stored capability input schema cannot be built.", ex);
     }
 
-    var results = jsonSchema.Evaluate(JsonNode.Parse(instance.GetRawText()), ListOutput);
+    var results = jsonSchema.Evaluate(JsonNode.Parse(instance.GetRawText()), Evaluation);
     if (results.IsValid)
       return [];
 
     var violations = new List<ErrorDetail>();
     var seen = new HashSet<(string Path, string Message)>();
 
-    foreach (var node in new[] { results }.Concat(results.Details))
+    var pending = new Stack<EvaluationResults>(results.Details.Reverse());
+    pending.Push(results);
+    while (pending.TryPop(out var node))
     {
-      if (node.Errors is null)
-        continue;
+      if (node.Errors is not null)
+      {
+        var path = node.InstanceLocation.ToString();
+        foreach (var message in node.Errors.Values)
+          if (seen.Add((path, message)))
+            violations.Add(new ErrorDetail(path, message));
+      }
 
-      var path = node.InstanceLocation.ToString();
-      foreach (var message in node.Errors.Values)
-        if (seen.Add((path, message)))
-          violations.Add(new ErrorDetail(path, message));
+      for (var index = node.Details.Count - 1; index >= 0; index--)
+        pending.Push(node.Details[index]);
     }
 
     // Defensive: an invalid result without any message still has to be reported as invalid.

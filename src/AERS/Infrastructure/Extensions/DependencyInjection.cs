@@ -1,3 +1,4 @@
+using Application.Interfaces.Policies;
 using Application.Interfaces.Repositories;
 using Application.Interfaces.Policies;
 using Application.Interfaces.Runtime;
@@ -48,6 +49,11 @@ public static class DependencyInjection
     services.AddScoped<IAgentPresenceStore, RedisAgentPresenceStore>();
     services.AddScoped<IConnectionRegistry, RedisConnectionRegistry>();
     services.AddScoped<IRateLimiter, RedisRateLimiter>();
+    services.AddScoped<ITaskRuntimeStateStore, RedisTaskRuntimeStateStore>();
+    services.AddScoped<IDisconnectTracker, RedisDisconnectTracker>();
+    services.AddScoped<IRateLimiter, RedisRateLimiter>();
+    services.AddSingleton<IConnectionTerminator, RedisConnectionTerminator>();
+    services.AddSingleton<IRevocationSubscriber, RedisRevocationSubscriber>();
     services.AddScoped<IDependencyHealthChecker, DependencyHealthChecker>();
 
     services.AddSingleton<IApiKeyService, ApiKeyService>();

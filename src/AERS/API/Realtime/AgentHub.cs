@@ -20,7 +20,12 @@ namespace API.Realtime;
 public sealed class AgentHub(
   ITaskMessageService messageService,
   IConnectionRegistry connectionRegistry,
+  IDisconnectTracker disconnectTracker,
+  LiveConnectionTracker liveConnections,
+  IServiceScopeFactory scopeFactory,
+  IHostApplicationLifetime applicationLifetime,
   IOptions<InstanceOptions> instanceOptions,
+  TimeProvider timeProvider,
   ILogger<AgentHub> logger) : Hub
 {
   /// <summary>
@@ -51,21 +56,58 @@ public sealed class AgentHub(
       return;
     }
 
+    liveConnections.Add(agentId, Context);
+
+    try
+    {
+      // ADR-W7-03: the agent is back, so a pending disconnect mark no longer applies.
+      await disconnectTracker.ClearAsync(agentId);
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+      logger.LogWarning(ex, "Could not clear the disconnect mark of agent {AgentId}.", agentId);
+    }
+
     await base.OnConnectedAsync();
+
+    // A49 / ADR-W7-02: redeliver unacknowledged results OUTSIDE the connect path. The hub's own DI scope ends with this
+    // invocation, so the work gets a new scope. The application stopping token (not CancellationToken.None) is used so that a
+    // shutdown does not wait for it; an abandoned pass loses nothing because nothing is deleted before the caller acknowledges.
+    var stopping = applicationLifetime.ApplicationStopping;
+    _ = Task.Run(async () =>
+    {
+      try
+      {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<ITaskRecoveryService>().RedeliverAsync(agentId, stopping);
+      }
+      catch (Exception ex) when (ex is not OperationCanceledException)
+      {
+        logger.LogWarning(ex, "Redelivery for agent {AgentId} failed.", agentId);
+      }
+    });
   }
 
   public override async Task OnDisconnectedAsync(Exception? exception)
   {
     if (Context.User!.ToAgentContext().AgentId is { } agentId)
     {
+      liveConnections.Remove(agentId, Context.ConnectionId);
+
       try
       {
         // Compare-and-delete: a newer connection of the same agent keeps its mapping.
-        await connectionRegistry.UnbindAsync(agentId, Context.ConnectionId);
+        var unbound = await connectionRegistry.UnbindAsync(agentId, Context.ConnectionId);
+
+        // A45 / ADR-W7-03: nothing is failed here. A target may reconnect and still answer, and a caller disconnecting does not
+        // affect its tasks. Only when this was the current connection is the time of the disconnect recorded; the timeout
+        // worker fails the target's working tasks if it has not reconnected after TargetDisconnectGraceSeconds.
+        if (unbound)
+          await disconnectTracker.MarkDisconnectedAsync(agentId, timeProvider.GetUtcNow());
       }
-      catch (StateStoreUnavailableException ex)
+      catch (Exception ex) when (ex is not OperationCanceledException)
       {
-        logger.LogWarning(ex, "Could not remove the connection mapping of agent {AgentId}.", agentId);
+        logger.LogWarning(ex, "Could not remove the connection mapping or record the disconnect of agent {AgentId}.", agentId);
       }
     }
 

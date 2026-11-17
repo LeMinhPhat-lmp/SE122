@@ -120,7 +120,40 @@ Empty `Instance:Id` falls back to `Environment.MachineName`. All are validated o
 `TaskPolicyEvaluator` is pure (no repository, no Redis): domain scope (`DOMAIN_FORBIDDEN`) -> capability exists, ordinal and case-sensitive
 (`CAPABILITY_NOT_FOUND`) -> input valid against `inputSchema` via `JsonSchemaInputValidator` (JsonSchema.Net, Draft 2020-12; `format`
 is not asserted) -> `VALIDATION_ERROR` with paths under `/payload/input`. Not included yet: rate limit, depth, cycle (Week 8).
-**A minimal implementation was added by A because A-02 cannot run without it; B-01 may overwrite these files** (interfaces are frozen).
+The evaluator is registered as a singleton and has no repository, Redis, or other I/O dependency. The schema validator is also
+registered as a singleton and keeps no cache in Week 6. It uses JsonSchema.Net's hierarchical evaluation output and flattens all
+failing nodes to JSON Pointer paths relative to the input; `format` remains annotation-only.
+
+## 8.1. Agent client (B-02)
+
+`AERS.AgentClient` now provides `AersAgentConnection` for the `/hubs/agent` SignalR endpoint. It sends the API key only in the
+`X-Api-Key` header, uses JSON camelCase with lowercase task statuses, and does not enable automatic reconnect. Results are correlated
+by `taskId` and buffered before an ack or before `WaitForResultAsync`; the buffer is capped at 1000 results and five minutes.
+Invocation handlers are dispatched outside the SignalR receive callback and are bounded by `MaxConcurrentInvocations`, so nested
+calls on the same connection do not deadlock. `GetTaskAsync` reads `GET /tasks/{taskId}` using the existing HTTP client.
+
+The client uses a small injectable `IHubTransport` abstraction for unit tests; production wraps `HubConnection`. The project remains
+`net8.0` to preserve the existing `AERS.DummyAgent` dependency. The only new package is
+`Microsoft.AspNetCore.SignalR.Client` 8.0.34.
+
+## 8.2. Dummy Agent (B-03)
+
+`AERS.DummyAgent.Core` contains the console-independent deterministic catalog (`echo`, `analyze_cv`, `slow_echo`,
+`always_fail`, `never_reply`, and `forward`) and the `DummyAgent` lifecycle wrapper. Registration happens before the hub
+connection and heartbeat; `Connect = false` leaves a registered but unavailable target. Invocation records contain only task
+metadata, never input/output bodies. `never_reply` uses the client-side suppress-reply marker so callers exercise their own timeout.
+
+The `AERS.DummyAgent` console supports `serve`, `call`, `scenario`, and `inspect`; API keys are masked or read from an environment
+variable. The walkthrough is in `docs/week-06-demo.md`. The catalog's schemas use `additionalProperties: false`, and the core
+library has no console or server-project dependency.
+
+## 8.3. Integration tests (B-04)
+
+`TaskHubIntegrationTests` reuses the PostgreSQL/Redis `WebApplicationFactory` fixture and uses an in-process SignalR client with
+Long Polling and the `X-Api-Key` header. The raw JSON cases assert acknowledgement shape, explicit nulls, task invocation
+ancestry, rejected policy/create messages, result forwarding, and `GET /tasks` visibility. Tests remain skipped unless
+`AERS_RUN_INTEGRATION_TESTS=1` is set, so a normal unit-test run does not require Docker. The current harness contains 31
+executable cases; the remaining concurrency/ancestry/startup-purge cases are intentionally left for the final container pass.
 
 ## 9. Decisions A20-A40 (summary)
 
@@ -176,6 +209,16 @@ both `DependencyInjection` files in Application/Infrastructure/API, `Program.cs`
 - The hub passes `CancellationToken.None` to `HandleAsync` so a caller disconnecting mid-`task.create` cannot leave a half-created task.
 - Integration tests with Testcontainers (CAS race on real PostgreSQL, Redis registry semantics, hub authentication) are task B-04 (IT-W6-xx);
   A provides unit tests with an in-memory CAS model and the manual procedure instead.
-- B-01 (`ITaskPolicyEvaluator`, `IInputSchemaValidator` and implementations) was implemented minimally by A as a prerequisite.
+- B-01 includes focused unit coverage for policy stage ordering, capability matching/soft deletion, schema errors, `$ref`/`$defs`,
+  Draft 2020-12 `prefixItems`, and the documented non-asserted `format` behavior.
+- B-02 includes fake-transport coverage for result buffering, rejected acknowledgements, failed outcomes, timeouts, nested calls,
+  invocation failures, and `GetTaskAsync` authentication.
+- B-03 adds the `AERS.DummyAgent.Core` project, deterministic behaviors, lifecycle wrapper, console commands, demo guide, and
+  catalog unit tests. `never_reply` required the additive `InvocationResult.SuppressReply` marker in the client contract.
+- B-04 adds the TestServer/SignalR integration harness and 31 executable Week 6 cases. The remaining container-heavy concurrency,
+  ancestry-chain, and startup-purge cases remain for the final B-04 pass after the A-04/A-05 integration surface is stabilized.
+- The B-02 context requested `net10.0`, but the existing AgentClient/DummyAgent pair is `net8.0`; it was preserved to avoid breaking
+  the dependent console project.
 - The solution/`Migrations` files were not part of the snapshot; add `AERS.UnitTests` and `AERS.HubProbe` to your solution (`dotnet sln add`).
-- **Nothing was compiled or run**: the authoring environment had no .NET SDK. Run `dotnet build` and `dotnet test` first and fix any compile error before review.
+- Validation completed with `mise exec -- dotnet test test/AERS.UnitTests/AERS.UnitTests.csproj`: 93 tests passed and 5
+  environment-dependent integration tests were skipped. Existing nullable warnings in `Result<T>` and task persistence remain outside B-01.

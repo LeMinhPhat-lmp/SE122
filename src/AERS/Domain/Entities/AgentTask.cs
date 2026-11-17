@@ -31,6 +31,13 @@ public sealed class AgentTask : BaseEntity
   public DateTimeOffset? CompletedAt { get; set; }
   public TaskError? Error { get; set; }
 
+  /// <summary>
+  /// ADR-W7-02: set when the caller confirms with task.ack that it processed the terminal result. Persistence only: it is
+  /// not part of any wire schema and not returned by GET /tasks/{id}. Terminal tasks with a null value are redelivered
+  /// when the caller reconnects.
+  /// </summary>
+  public DateTimeOffset? AcknowledgedAt { get; set; }
+
   public static AgentTask Create(
     Guid id,
     Guid callerAgentId,
